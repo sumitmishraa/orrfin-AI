@@ -116,3 +116,48 @@ def test_memory_uses_an_organization_bank_and_validated_sources(monkeypatch):
     assert calls[0]['bank_id']=='vendormind-'+org_id and calls[0]['document_id']==event_id
     result=retrieve_memory(org_id,vendor_id,{source_id:event_type})
     assert result['evidence']==[{'source':source_id,'text':event_type.replace('_',' ')}]
+
+def test_synthetic_demo_runs_without_pilot_services(monkeypatch):
+    from backend.pilot import DEMO_USER, DEMO_ORG
+    monkeypatch.setenv('DEMO_PASSWORD','test-demo-password')
+    monkeypatch.setenv('SESSION_SECRET','test-demo-secret-long-enough')
+    monkeypatch.delenv('PILOT_ENABLE_UNSAFE_LOCAL',raising=False)
+    monkeypatch.setenv('HINDSIGHT_API_KEY','not-a-real-key')
+    monkeypatch.setattr('backend.pilot.httpx.post',lambda *args,**kwargs: (_ for _ in ()).throw(AssertionError('Demo must not contact external services')))
+    real_org=client.post('/api/pilot/organizations',json={'name':'Real workspace fixture'}).json()['id']
+    app.dependency_overrides.pop(bearer_user,None)
+    demo=TestClient(app)
+    try:
+        assert demo.post('/api/login',json={'password':'test-demo-password'}).status_code==200
+        assert demo.post('/api/pilot/demo/bootstrap').json()['id']==DEMO_ORG
+        assert [o['id'] for o in demo.get('/api/pilot/organizations').json()]==[DEMO_ORG]
+        assert demo.get(f'/api/pilot/{real_org}/suppliers').status_code==404
+        assert len(demo.get(f'/api/pilot/{DEMO_ORG}/suppliers').json())==3
+        requests=demo.get(f'/api/pilot/{DEMO_ORG}/requests').json()
+        assert {r['status'] for r in requests}=={'open','ordered'}
+        quotes=demo.get(f'/api/pilot/{DEMO_ORG}/requests/req_demo_open/quotes').json()
+        assert len(quotes)==2 and quotes[0]['supplier']=='ValueChem'
+        link=demo.post(f'/api/pilot/{DEMO_ORG}/requests/req_demo_open/invites',json={'vendor_id':'sup_demo_swift'}).json()
+        supplier_headers={'X-Supplier-Token':link['url'].split('#',1)[1]}
+        assert demo.get('/api/pilot/portal',headers=supplier_headers).json()['synthetic']
+        assert demo.post('/api/pilot/portal/quote',headers=supplier_headers,json={'prices':['91.00'],'tax':'0','freight':'0','lead_days':2}).status_code==200
+        assert len(demo.get(f'/api/pilot/{DEMO_ORG}/requests/req_demo_open/quotes').json())==3
+        result=demo.get(f'/api/pilot/{DEMO_ORG}/orders/po_demo_sample/invoices').json()
+        assert not result[0]['match']['matched']
+        assert any('Unit price differs' in e for e in result[0]['match']['exceptions'])
+        receipt=demo.post(f'/api/pilot/{DEMO_ORG}/orders/po_demo_sample/receipts',json={'quantities':['1'],'idempotency_key':'demo-receipt-test-123'}).json()
+        assert receipt['memory_status']=='demo_not_sent'
+        order_link=demo.post(f'/api/pilot/{DEMO_ORG}/orders/po_demo_sample/supplier-link').json()
+        order_headers={'X-Supplier-Token':order_link['url'].split('#',1)[1]}
+        upload=demo.post('/api/pilot/portal/invoices/invoice_demo_sample/attachment',headers=order_headers,files={'file':('sample.pdf',b'%PDF-1.4 sample','application/pdf')})
+        assert upload.status_code==200 and upload.json()['synthetic']
+        file_url=demo.get(f'/api/pilot/{DEMO_ORG}/invoices/invoice_demo_sample/attachment').json()['url']
+        assert demo.get(file_url).content==b'%PDF-1.4 sample'
+        assert demo.get(f'/api/pilot/{DEMO_ORG}/discover?query=paper&location=Bengaluru').json()['synthetic']
+        assert demo.post('/api/pilot/organizations',json={'name':'Not allowed'}).status_code==403
+        assert demo.post('/api/pilot/demo/reset').status_code==200
+        assert len(demo.get(f'/api/pilot/{DEMO_ORG}/requests/req_demo_open/quotes').json())==2
+        assert demo.get(file_url).status_code==404
+    finally:
+        app.dependency_overrides[bearer_user]=lambda:current_user
+    assert client.get(f'/api/pilot/{real_org}/suppliers').status_code==200

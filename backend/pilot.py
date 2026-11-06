@@ -6,16 +6,21 @@ import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from threading import Lock
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, Cookie, Depends, File, Header, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String, UniqueConstraint, select
+from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String, UniqueConstraint, delete, select
 from sqlalchemy.orm import Mapped, mapped_column
-from backend.app import Base, Session, DATABASE_URL
+from backend.app import Base, Session, DATABASE_URL, require_session
 
 router = APIRouter(prefix='/api/pilot', tags=['pilot'])
+DEMO_ORG='org_vendormind_demo'
+DEMO_USER='vendormind_synthetic_demo_user'
+DEMO_ATTACHMENTS={}
+DEMO_SEED_LOCK=Lock()
 
 def uid(prefix): return prefix + '_' + secrets.token_hex(8)
 def now(): return datetime.now(timezone.utc)
@@ -173,7 +178,10 @@ def ensure_pilot_ready():
     if os.getenv('PILOT_ENABLE_UNSAFE_LOCAL')=='1': return
     if DATABASE_URL.startswith('sqlite') or os.getenv('PILOT_RLS_READY')!='1':
         raise HTTPException(503,'Pilot access is disabled until the dedicated database and organization isolation are configured.')
-def bearer_user(authorization:Optional[str]=Header(default=None)):
+def bearer_user(authorization:Optional[str]=Header(default=None),vm_session:Optional[str]=Cookie(default=None)):
+    if not authorization and vm_session:
+        require_session(vm_session)
+        return DEMO_USER
     ensure_pilot_ready()
     url=os.getenv('SUPABASE_URL','').rstrip('/'); key=os.getenv('SUPABASE_ANON_KEY','')
     if not url or not key: raise HTTPException(503,'Buyer sign-in is not configured. Set up Supabase first.')
@@ -195,10 +203,10 @@ def get_owned(db,model,id,org):
     return obj
 def dt_utc(d): return d.replace(tzinfo=timezone.utc) if d.tzinfo is None else d
 def invitation_for(db, token):
-    ensure_pilot_ready()
     token_hash=hashlib.sha256(token.encode()).hexdigest()
     invitation=db.scalar(select(Invitation).where(Invitation.token_hash==token_hash))
     if not invitation or invitation.revoked or dt_utc(invitation.expires_at)<=now(): raise HTTPException(404,'This supplier link is invalid, expired or revoked.')
+    if invitation.org_id!=DEMO_ORG: ensure_pilot_ready()
     return invitation
 def vendor_json(v): return {'id':v.id,'name':v.name,'email':v.email,'phone':v.phone,'location':v.location,'category':v.category,'place_id':v.place_id,'approved':v.approved}
 def req_json(r): return {'id':r.id,'title':r.title,'location':r.location,'deadline':r.deadline,'budget':r.budget,'currency':r.currency,'lines':r.lines,'status':r.status,'created_at':r.created_at.isoformat()}
@@ -209,8 +217,8 @@ def send_memory(event_id):
         event=db.get(MemoryEvent,event_id)
         if not event: return 'not_found'
         org_id,vendor_id,source_id,event_type=event.org_id,event.vendor_id,event.source_id,event.event_type
-    status='not_configured'
-    if os.getenv('HINDSIGHT_API_KEY'):
+    status='demo_not_sent' if org_id==DEMO_ORG else 'not_configured'
+    if org_id!=DEMO_ORG and os.getenv('HINDSIGHT_API_KEY'):
         try:
             from hindsight_client import Hindsight
             client=Hindsight(base_url=os.getenv('HINDSIGHT_API_URL','https://api.hindsight.vectorize.io'),api_key=os.environ['HINDSIGHT_API_KEY'],timeout=5,max_attempts=1)
@@ -220,6 +228,7 @@ def send_memory(event_id):
     with Session.begin() as db: db.get(MemoryEvent,event_id).status=status
     return status
 def retrieve_memory(org_id,vendor_id,known):
+    if org_id==DEMO_ORG: return {'status':'sample_data_only','evidence':[]}
     if not os.getenv('HINDSIGHT_API_KEY'): return {'status':'not_configured','evidence':[]}
     try:
         from hindsight_client import Hindsight
@@ -235,12 +244,52 @@ def retrieve_memory(org_id,vendor_id,known):
 
 @router.get('/config')
 def config(): return {'supabase_url':os.getenv('SUPABASE_URL',''),'supabase_anon_key':os.getenv('SUPABASE_ANON_KEY',''),'google_places':bool(os.getenv('GOOGLE_PLACES_API_KEY'))}
+@router.post('/demo/bootstrap')
+def demo_bootstrap(user:str=Depends(bearer_user)):
+    if user!=DEMO_USER: raise HTTPException(403,'Demo access required.')
+    with DEMO_SEED_LOCK:
+        return seed_demo()
+def seed_demo():
+    with Session.begin() as db:
+        if db.get(Organization,DEMO_ORG):
+            previous=db.get(PurchaseRequest,'req_demo_ordered')
+            if previous and previous.title=='Pantry supplies — previous order': previous.title='Floor cleaner — previous order'
+            return {'id':DEMO_ORG,'name':'Sample workspace'}
+        org=Organization(id=DEMO_ORG,name='Sample workspace',created_at=now());db.add(org);db.flush()
+        db.add(Member(id='member_demo',org_id=DEMO_ORG,user_id=DEMO_USER,role='owner'))
+        for id,name,category in [('sup_demo_cleanpro','CleanPro','Cleaning supplies'),('sup_demo_value','ValueChem','Cleaning supplies'),('sup_demo_swift','SwiftSupply','Facility supplies')]:
+            db.add(Vendor(id=id,org_id=DEMO_ORG,name=name,email='',phone='',location='Bengaluru',category=category,place_id='',approved=True))
+        db.flush()
+        due=(now().date()+timedelta(days=30)).isoformat()
+        lines=[{'description':'Commercial floor cleaner','quantity':'500.000','unit':'litre'}]
+        for rid,title,status in [('req_demo_open','Floor cleaner replenishment','open'),('req_demo_ordered','Floor cleaner — previous order','ordered')]:
+            db.add(PurchaseRequest(id=rid,org_id=DEMO_ORG,title=title,location='Bengaluru',deadline=due,budget='50000.00',currency='INR',lines=lines,status=status,created_at=now()))
+        db.flush()
+        for id,rid,vendor,price,total in [('quote_demo_clean','req_demo_open','sup_demo_cleanpro','95.00','47500.00'),('quote_demo_value','req_demo_open','sup_demo_value','88.00','44000.00'),('quote_demo_order','req_demo_ordered','sup_demo_cleanpro','90.00','45000.00')]:
+            db.add(Quote(id=id,org_id=DEMO_ORG,request_id=rid,vendor_id=vendor,prices=[price],tax='0.00',freight='0.00',total=total,lead_days=2,submitted_at=now()))
+        db.flush()
+        db.add(Order(id='po_demo_sample',org_id=DEMO_ORG,request_id='req_demo_ordered',vendor_id='sup_demo_cleanpro',quote_id='quote_demo_order',lines=[{**lines[0],'unit_price':'90.00'}],currency='INR',tax='0.00',freight='0.00',total='45000.00',created_at=now()));db.flush()
+        db.add(Receipt(id='grn_demo_partial',org_id=DEMO_ORG,order_id='po_demo_sample',idempotency_key='sample-receipt-0001',quantities=['400.000'],note='Sample partial delivery',received_on=now().date().isoformat(),quality_ok=True,created_at=now()))
+        db.add(Invoice(id='invoice_demo_sample',org_id=DEMO_ORG,order_id='po_demo_sample',vendor_id='sup_demo_cleanpro',number='SAMPLE-001',lines=[{'quantity':'500.000','unit_price':'92.00'}],tax='0.00',freight='0.00',total='46000.00',status='submitted',created_at=now()))
+        audit(db,DEMO_ORG,'po_demo_sample','sample_data_created','demo')
+    return {'id':DEMO_ORG,'name':'Sample workspace'}
+@router.post('/demo/reset')
+def reset_demo(user:str=Depends(bearer_user)):
+    if user!=DEMO_USER: raise HTTPException(403,'Demo access required.')
+    with DEMO_SEED_LOCK:
+        with Session.begin() as db:
+            for model in (MemoryEvent,Audit,Invoice,Receipt,Order,Quote,Invitation,PurchaseRequest,Vendor,Member):
+                db.execute(delete(model).where(model.org_id==DEMO_ORG))
+            db.execute(delete(Organization).where(Organization.id==DEMO_ORG))
+        DEMO_ATTACHMENTS.clear()
+        return seed_demo()
 @router.get('/organizations')
 def organizations(user:str=Depends(bearer_user)):
     with Session() as db:
         return [{'id':o.id,'name':o.name} for o in db.scalars(select(Organization).join(Member,Member.org_id==Organization.id).where(Member.user_id==user)).all()]
 @router.post('/organizations')
 def create_organization(data:OrgIn,user:str=Depends(bearer_user)):
+    if user==DEMO_USER: raise HTTPException(403,'The sample workspace cannot create real organizations.')
     with Session.begin() as db:
         o=Organization(id=uid('org'),name=data.name.strip(),created_at=now()); db.add(o); db.flush()
         db.add(Member(id=uid('mem'),org_id=o.id,user_id=user,role='owner')); audit(db,o.id,o.id,'workspace_created',user)
@@ -275,6 +324,8 @@ async def import_suppliers(org_id:str,file:UploadFile=File(...),user:str=Depends
     return {'imported':len(prepared),'message':'Imported suppliers are unapproved until reviewed.'}
 @router.get('/{org_id}/discover')
 def discover(org_id:str,query:str,location:str,user:str=Depends(require_org)):
+    if org_id==DEMO_ORG:
+        return {'synthetic':True,'places':[{'id':'demo-lead-one','displayName':{'text':'Sample Supply Co.'},'formattedAddress':'Fictional supplier · '+location},{'id':'demo-lead-two','displayName':{'text':'Sample Facility Goods'},'formattedAddress':'Fictional supplier · '+location}],'notice':'Fictional sample search results; these are not real vendors.'}
     key=os.getenv('GOOGLE_PLACES_API_KEY')
     if not key: raise HTTPException(503,'Google Places is not configured. Add a Google Places API key to enable live discovery.')
     if not query.strip() or not location.strip() or len(query)>120 or len(location)>120: raise HTTPException(422,'Enter a category and location.')
@@ -318,7 +369,7 @@ def portal(token:str=Header(alias='X-Supplier-Token')):
         inv=invitation_for(db,token);r=db.get(PurchaseRequest,inv.request_id);v=db.get(Vendor,inv.vendor_id)
         order=db.scalar(select(Order).where(Order.request_id==r.id,Order.vendor_id==v.id))
         public_request=req_json(r);public_request.pop('budget',None)
-        return {'supplier':{'name':v.name},'request':public_request,'order':order_json(order) if order else None}
+        return {'supplier':{'name':v.name},'request':public_request,'order':order_json(order) if order else None,'synthetic':inv.org_id==DEMO_ORG}
 @router.post('/portal/quote')
 def submit_quote(data:QuoteIn,token:str=Header(alias='X-Supplier-Token')):
     with Session.begin() as db:
@@ -348,7 +399,7 @@ def compare_quotes(org_id:str,request_id:str,user:str=Depends(require_org)):
                 history.append({'source':x.id,'received_on':x.received_on,'on_time':x.received_on<=old_request.deadline,'quality_ok':x.quality_ok,'note':x.note})
             events=db.scalars(select(MemoryEvent).where(MemoryEvent.org_id==org_id,MemoryEvent.vendor_id==v.id,MemoryEvent.status=='submitted')).all()
             known={event.source_id:event.event_type for event in events}
-            memory=retrieve_memory(org_id,v.id,known) if known else {'status':memory_status(),'evidence':[]}
+            memory=retrieve_memory(org_id,v.id,known) if known else {'status':'sample_data_only' if org_id==DEMO_ORG else memory_status(),'evidence':[]}
             rows.append({'id':q.id,'vendor_id':v.id,'supplier':v.name,'prices':q.prices,'tax':q.tax,'freight':q.freight,'total':q.total,'currency':r.currency,'lead_days':q.lead_days,'eligible':not reasons,'reasons':reasons,'history':history,'memory':memory})
         return sorted(rows,key=lambda x:(not x['eligible'],Decimal(x['total'])))
 @router.post('/{org_id}/quotes/{quote_id}/approve')
@@ -429,6 +480,12 @@ async def upload_invoice(invoice_id:str,file:UploadFile=File(...),token:str=Head
     elif raw.startswith(b'\x89PNG\r\n\x1a\n'): content_type='image/png';extension='png'
     elif raw.startswith(b'\xff\xd8\xff'): content_type='image/jpeg';extension='jpg'
     else: raise HTTPException(422,'Upload a PDF, PNG or JPEG invoice.')
+    if org_id==DEMO_ORG:
+        if len(DEMO_ATTACHMENTS)>=20: raise HTTPException(503,'Sample attachment storage is full; restart the demo to clear it.')
+        DEMO_ATTACHMENTS[invoice_id]=(raw,content_type)
+        with Session.begin() as db:
+            i=get_owned(db,Invoice,invoice_id,org_id);i.attachment_path='demo-in-memory';audit(db,org_id,i.order_id,'sample_attachment_added','supplier')
+        return {'uploaded':True,'synthetic':True}
     url=os.getenv('SUPABASE_URL','').rstrip('/');key=os.getenv('SUPABASE_SERVICE_ROLE_KEY','');bucket=os.getenv('SUPABASE_STORAGE_BUCKET','vendormind-invoices')
     if not url or not key: raise HTTPException(503,'Private document storage is not configured.')
     path=f'{org_id}/{invoice_id}/{secrets.token_hex(12)}.{extension}'
@@ -472,12 +529,21 @@ def invoice_attachment(org_id:str,invoice_id:str,user:str=Depends(require_org)):
         i=get_owned(db,Invoice,invoice_id,org_id)
         if not i.attachment_path: raise HTTPException(404,'No attachment.')
         path=i.attachment_path
+    if org_id==DEMO_ORG:
+        if invoice_id not in DEMO_ATTACHMENTS: raise HTTPException(404,'The sample attachment is no longer available after server restart.')
+        return {'url':f'/api/pilot/{org_id}/invoices/{invoice_id}/sample-file'}
     url=os.getenv('SUPABASE_URL','').rstrip('/');key=os.getenv('SUPABASE_SERVICE_ROLE_KEY','');bucket=os.getenv('SUPABASE_STORAGE_BUCKET','vendormind-invoices')
     if not url or not key: raise HTTPException(503,'Private document storage is not configured.')
     try:
         response=httpx.post(f'{url}/storage/v1/object/sign/{bucket}/{path}',headers={'Authorization':f'Bearer {key}','apikey':key},json={'expiresIn':60},timeout=5);response.raise_for_status()
         return {'url':url+'/storage/v1'+response.json()['signedURL']}
     except Exception: raise HTTPException(503,'Unable to open attachment.')
+@router.get('/{org_id}/invoices/{invoice_id}/sample-file')
+def sample_invoice_file(org_id:str,invoice_id:str,user:str=Depends(require_org)):
+    if org_id!=DEMO_ORG or invoice_id not in DEMO_ATTACHMENTS: raise HTTPException(404,'No sample attachment.')
+    with Session() as db: get_owned(db,Invoice,invoice_id,org_id)
+    raw,content_type=DEMO_ATTACHMENTS[invoice_id]
+    return Response(content=raw,media_type=content_type,headers={'Content-Disposition':'attachment','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
 @router.post('/{org_id}/invoices/{invoice_id}/resolve')
 def resolve(org_id:str,invoice_id:str,data:ResolutionIn,user:str=Depends(require_org)):
     with Session.begin() as db:

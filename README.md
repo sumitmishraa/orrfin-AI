@@ -25,7 +25,7 @@ python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000 --no-access-log
 npm run dev
 ```
 
-Open `http://localhost:3000/demo`. This route uses the original synthetic dataset and shared demo password; it is not the real pilot workspace at `/workspace`. Purchase orders and supplier messages are never sent automatically.
+Open `http://localhost:3000/demo` and enter the configured demo password. This route now opens the complete supplier, quote, order and invoice workflow with a separate, clearly labelled fictional workspace. It includes example quotes and an invoice mismatch, and lets you create supplier links and try the supplier portal. Use **Reset sample** to restore the examples after exploring; this clears only the shared fictional workspace and its temporary files. Sample search results are fictional, Hindsight is never contacted from this workspace, and sample invoice files are held in temporary server memory only. Never upload real confidential data to this shared demo. The original comparison-only demo remains at `/legacy-demo`. The real pilot is separate at `/workspace`; no supplier messages or purchase orders are sent automatically.
 
 ## Workflow
 
