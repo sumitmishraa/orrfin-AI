@@ -232,3 +232,8 @@ def replay(decision_id: str):
         if not d: raise HTTPException(404,'Decision not found')
         after=recommend(db,Request(**d.request))
         return {'id':d.id,'request':d.request,'before':d.result,'after':after,'explanation':'The request and quotes are unchanged. Recorded outcomes and available memory evidence may have changed.'}
+
+# Keep pilot tables and routes independent of the legacy synthetic demo.
+from backend.pilot import router as pilot_router
+Base.metadata.create_all(engine)
+app.include_router(pilot_router)

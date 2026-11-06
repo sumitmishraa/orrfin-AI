@@ -1,35 +1,40 @@
 # VendorMind
 
-A procurement decision workspace with a public landing page and a password-protected synthetic-data demo. It compares eligible quotes, explains structured supplier metrics, captures outcomes and replays a saved decision. Hindsight provides source-linked supporting memory; it never silently changes the numeric score. No purchasing or supplier communication is performed.
+VendorMind connects supplier discovery, quote requests, purchase orders, delivery receipts and three-way invoice matching. The landing page and a separate fictional-data demo remain available alongside an organization-scoped pilot workspace.
 
-## Local setup
+## Pilot setup
 
-Requirements: Node.js 20+, Python 3.10+, and optionally a PostgreSQL database and Hindsight Cloud account.
+The pilot is intentionally disabled until a **dedicated** Supabase project and database isolation are configured. Do not point it at an unrelated project or enable it for real records before verification.
 
-1. Install dependencies: `npm install` and `python -m pip install -r backend/requirements.txt`.
-2. Set `DEMO_PASSWORD` and a long random `SESSION_SECRET` in the backend environment. See `.env.example`. Never commit or send secrets through chat.
-3. Start the API: `python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000`.
-4. In another terminal start the frontend: `npm run dev`. Open `http://localhost:3000` and use your chosen password at `/demo`.
+1. Install Node.js 20+ and Python 3.10+. Run `npm ci` and `python -m pip install -r backend/requirements.txt`.
+2. Create a dedicated Supabase project. Set `DATABASE_URL` to its PostgreSQL connection string, `SUPABASE_URL` to its project URL, `SUPABASE_ANON_KEY` to its publishable/anon key, and `SUPABASE_SERVICE_ROLE_KEY` to its secret server-only key. Never expose the service key to the browser or commit it.
+3. Configure Supabase Auth email magic links, the site's URL and redirect URL (`/workspace`), and a production SMTP provider. Configure a **private** Storage bucket named `vendormind-invoices`.
+4. Restrict or disable Supabase Data API access during setup. Start the backend once with `PILOT_RLS_READY=0` so the tables are created. Apply and review `backend/enable_rls.sql` to the dedicated database, then verify row-level security, revoked Data API privileges and cross-organization isolation. Only after verification set `PILOT_RLS_READY=1` and restart the backend. FastAPI's direct database role is trusted and application authorization checks must remain enabled.
+5. Set `PUBLIC_APP_URL` to the public HTTPS frontend URL; it is used for supplier links. Set `COOKIE_SECURE=1` for HTTPS. Keep the API private behind the frontend proxy; use `--no-access-log` when starting the backend.
+6. For live supplier discovery, create a restricted, billing-enabled Google Places API key and set `GOOGLE_PLACES_API_KEY` on the backend. The application shows Google Maps attribution and retains only the selected Place ID; supplier information is entered independently by buyers.
+7. Add a **replacement** Hindsight Cloud key as `HINDSIGHT_API_KEY` on the backend, not in source control or browser code. Each workspace uses its own memory bank and retains only pseudonymous supplier/event IDs and source references. Memory writes are retriable from the workspace. Hindsight is optional for the structured workflow but required to verify the memory integration.
 
-For PowerShell, set variables with `$env:DEMO_PASSWORD = '...'` and `$env:SESSION_SECRET = '...'` in the terminal that runs the API. The values in `.env.example` are placeholders and are intentionally rejected. SQLite is used locally by default; set `DATABASE_URL` to a PostgreSQL connection string for a deployed demo.
+Set environment variables on the hosting provider or in the backend shell; `.env.example` lists names without secrets. The default local SQLite database is for the fictional demo, not pilot records. Real Hindsight, Google Places, Supabase Auth, Storage and PostgreSQL must be configured before end-to-end service verification.
 
-## Hindsight
+## Local fictional demo
 
-Create a Hindsight Cloud API key as described in [Hindsight setup](https://docs.hindsight.vectorize.io/cloud/getting-started/) and set `HINDSIGHT_API_KEY`, `HINDSIGHT_API_URL` and `HINDSIGHT_BANK_ID` on the backend. In the workspace, **Sync demo memory** submits up to six unsynced synthetic events at a time. Hindsight indexing is asynchronous: wait briefly and replay or request another decision. New outcomes are saved first and then submitted to memory; failures are visible and can be retried via sync. The application works in degraded mode if Hindsight is unavailable. Only retrieved text containing both a known supplier ID and a known source ID is displayed.
+Set `DEMO_PASSWORD` and a unique long `SESSION_SECRET` in the backend environment, then run:
 
-## Demo walkthrough
+```text
+python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000 --no-access-log
+npm run dev
+```
 
-1. Compare the default 500-litre, Bengaluru, two-day request.
-2. Inspect the supplier comparison, exclusions, score and evidence in the decision receipt.
-3. Record an outcome for an eligible supplier and use Learning replay to compare the saved snapshot against the current evidence.
-4. If Hindsight is configured, sync seed events, wait for indexing, then run replay to see supported recalled evidence.
+Open `http://localhost:3000/demo`. This route uses the original synthetic dataset and shared demo password; it is not the real pilot workspace at `/workspace`. Purchase orders and supplier messages are never sent automatically.
 
-Price score is the cheapest eligible quote divided by the supplier's quote, multiplied by 100. Delivery, quality and invoice percentages use up to 20 most recent known outcomes. Weights are 35%, 30%, 20%, and 15%; when a metric is unknown, known weights are renormalized. Suppliers with fewer than three delivery outcomes remain eligible but are listed after those with more evidence and marked for manual review. These are illustrative decision aids, not validated predictions. Quotes use unit price times quantity; no tax or freight data is represented.
+## Workflow
 
-## Deployment
+Buyers add or import suppliers, review and approve their details, create requests with line items, and share individual seven-day supplier links. Suppliers submit prices, tax, freight and lead time; buyers see eligible quotes ordered by total and choose one to create an order. Buyers enter deliveries, including partial quantities, and the supplier enters invoice details and optionally uploads a PDF, PNG or JPEG. The matching view compares order, cumulative receipts and cumulative invoices at line level, including unit price, quantities, tax and freight. Exceptions require a human review; no payment is initiated. The expected invoice draft is not a supplier invoice.
 
-Deploy the Next.js app and FastAPI service, set `BACKEND_URL` for the frontend, and use PostgreSQL through `DATABASE_URL`. Set `COOKIE_SECURE=1` behind HTTPS and configure unique `DEMO_PASSWORD` and `SESSION_SECRET`. Keep the backend behind the frontend proxy or protect direct network access, and configure API and database secrets on the host. The shared password is suitable only for this controlled synthetic-data demo; it is not tenant-aware authentication. The project has no user accounts, role-based permissions, migrations or real-data privacy guarantees.
+Supplier tokens are held in URL fragments and sent in a request header, stored only as hashes on the server, scoped to one supplier/request, expiring and revocable. A new order-stage link can be issued if the original link expires.
 
-## Verification
+## Validation and limitations
 
-Run `python -m pytest backend/test_app.py` and `npm run build`. The Hindsight integration requires a real configured account for a live retain/recall/reflect test; without one, tests cover the explicit degraded state.
+Run `python -m pytest backend/test_app.py backend/test_pilot.py`, `npm run build` and `npm audit --omit=dev`. The tests exercise the API with synthetic data and mocked authentication; they do **not** replace a live Supabase/RLS, real-storage, Google Places, Hindsight or deployment test. The current version has no organization-invite UI, accounting/ERP integration, automated invoice extraction, payment processing or self-service retention/deletion controls. Review the privacy and pilot terms, access controls, recovery procedures and hosting costs before onboarding real organizations.
+
+The supplied `render.yaml` describes a frontend and private API using externally supplied Supabase database credentials. It does not create the Supabase project. Its `PILOT_RLS_READY` default is deliberately off. Review the provider plan and costs before applying it.

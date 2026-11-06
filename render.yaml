@@ -1,8 +1,3 @@
-databases:
-  - name: vendormind-db
-    plan: basic-256mb
-    region: oregon
-
 services:
   - type: pserv
     name: vendormind-api
@@ -10,12 +5,22 @@ services:
     region: oregon
     plan: starter
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: uvicorn backend.app:app --host 0.0.0.0 --port 10000
+    startCommand: uvicorn backend.app:app --host 0.0.0.0 --port 10000 --no-access-log
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: vendormind-db
-          property: connectionString
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: vendormind-invoices
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: PUBLIC_APP_URL
+        sync: false
       - key: DEMO_PASSWORD
         sync: false
       - key: SESSION_SECRET
