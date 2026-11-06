@@ -1,0 +1,45 @@
+databases:
+  - name: vendormind-db
+    plan: basic-256mb
+    region: oregon
+
+services:
+  - type: pserv
+    name: vendormind-api
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.app:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vendormind-db
+          property: connectionString
+      - key: DEMO_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: HINDSIGHT_API_KEY
+        sync: false
+      - key: HINDSIGHT_API_URL
+        value: https://api.hindsight.vectorize.io
+      - key: HINDSIGHT_BANK_ID
+        value: vendormind-demo
+      - key: COOKIE_SECURE
+        value: '1'
+  - type: web
+    name: vendormind-web
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 22.16.0
+      - key: BACKEND_HOSTPORT
+        fromService:
+          type: pserv
+          name: vendormind-api
+          property: hostport
