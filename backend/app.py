@@ -4,10 +4,11 @@ import json
 import os
 import secrets
 import time
+from collections import defaultdict, deque
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Response
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Request as HTTPRequest, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import JSON, Boolean, Float, ForeignKey, Integer, String, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
@@ -51,6 +52,7 @@ class Decision(Base):
     review: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
 app = FastAPI(title='VendorMind API')
+login_attempts = defaultdict(deque)
 Base.metadata.create_all(engine)
 
 def seed():
@@ -166,9 +168,16 @@ def recommend(db, request):
 @app.get('/api/health')
 def health(): return {'status':'ok','memory':'configured' if os.getenv('HINDSIGHT_API_KEY') else 'not_configured'}
 @app.post('/api/login')
-def login(data: Login, response: Response):
+def login(data: Login, response: Response, request: HTTPRequest):
+    ip=request.client.host if request.client else 'unknown'
+    now=time.monotonic()
+    attempts=login_attempts[ip]
+    while attempts and now-attempts[0]>60: attempts.popleft()
+    if len(attempts)>=10: raise HTTPException(429,'Too many attempts. Please wait a minute.')
+    attempts.append(now)
     expected=os.getenv('DEMO_PASSWORD','')
     if not secrets.compare_digest(data.password, expected) or not expected: raise HTTPException(401,'Incorrect password.')
+    attempts.clear()
     expires=str(int(time.time())+8*60*60)
     response.set_cookie('vm_session', expires+'.'+signature(expires), httponly=True, secure=os.getenv('COOKIE_SECURE')=='1', samesite='strict', max_age=8*60*60, path='/')
     return {'ok':True}
