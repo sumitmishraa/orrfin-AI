@@ -274,7 +274,8 @@ def approve(db: Session, actor, invoice_id: UUID) -> Invoice:
     db.flush()
     invoice.status = "approved"
     invoice.approved_by, invoice.approved_at = actor.user_id, datetime.now(timezone.utc)
-    db.add(MemoryOutbox(tenant_id=invoice.tenant_id, supplier_id=invoice.supplier_id, source_id=invoice.normalized_number[:80] or str(invoice.id), event_type="invoice_approved"))
+    # Invoice numbers repeat across suppliers, so the source record is the invoice's own id.
+    db.add(MemoryOutbox(tenant_id=invoice.tenant_id, supplier_id=invoice.supplier_id, source_id=str(invoice.id), event_type="invoice_approved"))
     audit(db, actor, "invoice_approved", "invoice", invoice.id, total=invoice.total)
     from orrfin.erp.outbox import queue_document
 
