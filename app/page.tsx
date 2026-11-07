@@ -71,13 +71,13 @@ export default function Home() {
             <a href="#products">Products</a>
             <a href="#rules">Try the rules</a>
             <a href="/login">Sign in</a>
-            <a href="/login" className="ol-btn">Open the live demo</a>
+            <a href="/demo" className="ol-btn">Open the live demo</a>
           </div>
         </nav>
         <div className="ol-hero-copy">
           <h1 id="hero-h">Every branch buys.<br />One team pays.</h1>
           <p>Orrfin.ai is procurement for Indian multi-branch businesses: requests, approvals, POs, receipts and invoice matching, posted to Tally or Zoho Books.</p>
-          <a href="/login" className="ol-btn">Open the live demo</a>
+          <a href="/demo" className="ol-btn">Open the live demo</a>
         </div>
         <div className="ol-cards">
           <a className="ol-card" href="#rules"><Image src="/landing/ui/invoice-review.jpg" alt="An invoice PDF beside its extracted, confirmed fields" width={1600} height={1025} sizes="230px" priority /><span>Invoice review <span aria-hidden>↓</span></span></a>
@@ -132,7 +132,7 @@ export default function Home() {
         <div className="ol-close">
           <div>
             <h2 id="close-h" className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Try the demo</h2>
-            <p className="big">Run one purchase from a dark store to Tally yourself: <a href="/login">sign in as anyone in the company</a> and follow it end to end.</p>
+            <p className="big">Run one purchase from a dark store to Tally yourself, no sign-up needed: <a href="/demo">pick anyone in the company</a> and follow it end to end.</p>
             <div className="small">
               <p>Kirnova Quick Commerce is a fictional operator with 10 hubs, 58 dark stores, about 150 suppliers and a year of history.</p>
               <p>Each role sees its own screens and can do only what that job allows.</p>
@@ -147,7 +147,7 @@ export default function Home() {
       <footer className="ol-foot">
         <div className="ol-foot-cols">
           <ul><li>Product</li><li><a href="#rules">Try the rules</a></li><li><a href="#products">Nine products</a></li><li><a href="#refusals">What it refuses</a></li></ul>
-          <ul><li>Demo</li><li><a href="/login">Sign in to the demo</a></li><li><a href="/signup">Create an organization</a></li></ul>
+          <ul><li>Demo</li><li><a href="/demo">Open the live demo</a></li><li><a href="/login">Sign in with an account</a></li><li><a href="/signup">Create an organization</a></li></ul>
           <ul><li>Source</li><li><a href="https://github.com/sumitmishraa/vendormind" rel="noopener noreferrer">GitHub repository</a></li></ul>
           <ul><li>Legal</li><li><a href="/privacy">Privacy</a></li><li><a href="/terms">Terms</a></li></ul>
         </div>

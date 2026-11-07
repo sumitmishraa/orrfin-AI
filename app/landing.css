@@ -193,6 +193,32 @@
 .ol-credits a { color: #e9ddd6; }
 .ol-legal { font-size: 13px; color: #b9a9a2; margin-top: 8px; }
 
+/* ---------------- Live demo: role picker ---------------- */
+.ol-demo { min-height: 100svh; }
+.ol-demo-nav { color: var(--ink); }
+.ol-demo-body { padding: 48px var(--margin) 96px; display: grid; grid-template-columns: 5fr 7fr; gap: 56px; align-items: start; }
+.ol-demo-intro { position: sticky; top: 32px; display: grid; gap: 20px; }
+.ol-demo-intro h1 { font-size: var(--step-display); max-width: 9ch; }
+.ol-demo-intro p { font-size: var(--step-body); max-width: 44ch; }
+.ol-demo-intro .ol-demo-tip { background: var(--mustard); padding: 16px 18px; font-weight: 500; }
+.ol-roles ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.ol-role { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 4px 24px; align-items: center; text-align: left; border: 0; background: var(--surface); color: var(--ink); font: inherit; padding: 22px 24px; cursor: pointer; transition: background-color .2s, transform .15s var(--ease); }
+.ol-role strong { font-size: clamp(22px, 2vw, 28px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; }
+.ol-role span { grid-column: 1; font-size: 16px; color: var(--muted); max-width: 52ch; }
+.ol-role em { grid-column: 2; grid-row: 1 / span 2; font-style: normal; font-size: var(--step-small); font-weight: 600; background: var(--accent); color: var(--accent-ink); padding: 10px 14px; white-space: nowrap; }
+.ol-role:hover { background: var(--red); color: #fff; }
+.ol-role:hover span { color: #ffe3e3; }
+.ol-role:hover em { background: #fff; color: var(--red); }
+.ol-role:active { transform: scale(.99); }
+.ol-role:disabled { cursor: wait; opacity: .7; }
+.ol-roles-error { margin-top: 16px; background: var(--red); color: #fff; padding: 14px 16px; font-size: 16px; }
+@media (max-width: 900px) {
+  .ol-demo-body { grid-template-columns: 1fr; gap: 32px; padding-top: 16px; }
+  .ol-demo-intro { position: static; }
+  .ol-role { grid-template-columns: 1fr; }
+  .ol-role em { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 8px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rv, .ol-seg, .ol-sp, .ol-shot img, .ol-card { transition: none !important; }
   .rv.rv-wait { opacity: 1; transform: none; }

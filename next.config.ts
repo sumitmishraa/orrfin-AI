@@ -11,7 +11,7 @@ const config: NextConfig = {
     return [{ source: '/api/:path*', destination: `${apiTarget.replace(/\/$/, '')}/api/:path*` }];
   },
   async redirects() {
-    return ['/demo', '/workspace', '/legacy-demo', '/supplier', '/onboarding'].map((source) => ({ source, destination: '/login', permanent: false }));
+    return ['/workspace', '/legacy-demo', '/supplier', '/onboarding'].map((source) => ({ source, destination: '/login', permanent: false }));
   },
 };
 

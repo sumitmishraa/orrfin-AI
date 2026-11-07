@@ -1,4 +1,8 @@
 'use client';
+/*
+  Demo persona sign-in, used by /login and the app shell's "view as" switcher. The server only
+  enables it when ORRFIN_DEMO_LOGIN=1 and the fictional demo company is seeded (orrfin/api/auth.py).
+*/
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
@@ -50,20 +54,4 @@ export default function DemoPersonas({ info, selected, next }: { info: DemoInfo;
       {error && <p className="notice error" role="alert">{error}</p>}
     </>
   );
-}
-
-/** The landing page's demo entry: personas when the demo company is seeded, otherwise plain sign-in. */
-export function LandingDemo() {
-  const info = useDemo();
-  if (!info) return <p className="muted">Checking the demo…</p>;
-  if (!info.enabled) {
-    return (
-      <div className="fit">
-        <strong>The demo company isn’t loaded on this server.</strong>
-        <p className="muted">Run <code>python -m orrfin.seed</code> in the API container, or create your own organization.</p>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}><a className="button" href="/signup">Create an organization</a><a className="button secondary" href="/login">Sign in</a></div>
-      </div>
-    );
-  }
-  return <DemoPersonas info={info} />;
 }

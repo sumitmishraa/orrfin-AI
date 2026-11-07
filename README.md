@@ -25,7 +25,7 @@ python tools/stack.py up -d --wait --build
 docker compose -p orrfin-platform exec api python -m orrfin.seed   # optional: the fictional demo company
 ```
 
-Open http://localhost:8080. The seed prints the sign-in emails and one shared password.
+Open http://localhost:8080. The seed prints the sign-in emails and one shared password; with `ORRFIN_DEMO_LOGIN=1` (the Docker default), **http://localhost:8080/demo** lets anyone pick a role and enter the app with no password. The landing page's "Open the live demo" goes there.
 
 **Why `tools/stack.py`:** OneDrive turns synced files into cloud placeholders that Docker's build can't read. The script copies the source to `%LOCALAPPDATA%\orrfin-build` and runs `docker compose` there. In a checkout outside OneDrive, plain `docker compose up -d --wait --build` works.
 
@@ -33,13 +33,42 @@ Open http://localhost:8080. The seed prints the sign-in emails and one shared pa
 
 Put them in `.env`. Never commit them; `.env` is gitignored.
 
+<!-- AUTO-GENERATED from .env.example -->
 | Variable | Turns on |
 |---|---|
-| `ANTHROPIC_API_KEY` | Contract review summaries and the concierge's written answers (model `claude-opus-5-5`). An admin must also switch AI on under AI Procurement Concierge. |
-| `HINDSIGHT_API_KEY` | Supplier memory: structured events only, never document text. To give Claude Code access to the same memory, run `claude mcp add --transport http hindsight https://api.hindsight.vectorize.io/mcp/orrfin/` and sign in with `/mcp`. |
-| `TINYFISH_API_KEY` | Adverse-media research on a supplier, only when someone clicks Research. |
+| `GEMINI_API_KEY` | Google Gemini for the concierge's written answers and contract review summaries. Default model `gemini-3.5-flash`; when its quota runs out the app falls back to `gemini-3.5-flash-lite`, then `gemini-3.1-flash-lite`. `GEMINI_MODEL` overrides the first choice. |
+| `ANTHROPIC_API_KEY` | The same AI features on Claude (model `claude-opus-5-5`). Preferred over Gemini when both are set. |
+| `GROQ_API_KEY` | Contract summaries on Groq. The concierge's tool use needs Anthropic or Gemini. |
+| `ORRFIN_AI_PROVIDER` | Forces `anthropic`, `gemini` or `groq`. Blank picks from the keys that are set. |
+| `HINDSIGHT_API_KEY` | Supplier memory: structured events only, never document text. The worker sends up to 10 events per scan within a 4-second budget so it never holds up other jobs. To give Claude Code the same memory, run `claude mcp add --transport http hindsight https://api.hindsight.vectorize.io/mcp/orrfin/` and sign in with `/mcp`. |
+| `TINYFISH_API_KEY` | Adverse-media research on a supplier, only when someone clicks Research. A rejected key is reported as such on screen. |
+| `ORRFIN_DEMO_LOGIN` | One-click sign-in as a seeded persona (store lead, hub manager, procurement, accounts payable, legal, risk, admin) on `/login`. Works only for the fictional demo company. Set `0` for any real deployment. |
+| `ORRFIN_API_URL` | Vercel only: the hosted backend that `/api` is proxied to. |
+<!-- END AUTO-GENERATED -->
 
-Without them, every screen still works and says what is off rather than showing invented output.
+AI also needs an admin to switch it on for the organization under Concierge. Without keys, every screen still works and says what is off rather than showing invented output. Gemini's free tier allows 20 requests per model per day, and one concierge question can use several; enable billing for demos.
+
+## Deploy the web app on Vercel
+
+The repository root is a Next.js app, so Vercel detects it with no settings. Vercel hosts only the web app: the Python API, PostgreSQL and the worker run elsewhere (Render, Railway, a VM, or this Docker stack).
+
+1. Import the GitHub repository in Vercel. `.vercelignore` keeps the Python stack out of the upload, and `next.config.ts` skips the `standalone` output when it detects Vercel.
+2. The landing page works with no backend.
+3. To make sign-in and the role-based demo at `/demo` work, deploy the backend, then set `ORRFIN_API_URL` in Vercel to its address. `/api/*` is proxied there on the same origin, so session cookies stay first-party. Set `PUBLIC_APP_URL` on the backend to the Vercel address so supplier links point to it.
+
+Check a build locally the way Vercel runs it: `VERCEL=1 npm run build`.
+
+<!-- AUTO-GENERATED from package.json -->
+| Command | Description |
+|---|---|
+| `npm run dev` | Next.js dev server with hot reload; `/api` goes to `http://localhost:8080` (the Docker stack) unless `ORRFIN_API_URL` is set |
+| `npm run build` | Production build with type checking |
+| `npm run start` | Serve the production build |
+<!-- END AUTO-GENERATED -->
+
+## Landing page
+
+`app/page.tsx` with its interactive sections in `app/components/landing/Landing.tsx` and styles in `app/landing.css` (scoped `ol-` classes; app screens use `app/globals.css`). The font is Switzer, self-hosted from `app/fonts/` (Fontshare free licence). Photographs and the street clip in `public/landing/photos/` are openly licensed from Wikimedia Commons; `credits.json` records each source and licence, and the footer credits them. Product screenshots in `public/landing/ui/` come from the demo.
 
 ## The demo company (fictional)
 
@@ -68,7 +97,7 @@ They run inside the stack, through the gateway. They cover tenant isolation with
 
 - **ERP:** live Zoho Books and Tally Prime. Both adapters follow the published docs and are tested against `mock_erp/`, a local stand-in that enforces our reading of those docs. Check the first deliveries in a Zoho sandbox and a real Tally company. The Zoho state codes and tax-ID mapping need confirming there.
 - **Extraction:** accuracy on real supplier invoices. It is tested on generated layouts. Low-confidence fields are flagged, and nothing reaches matching until a person confirms it.
-- **AI, Hindsight and TinyFish:** answer quality and the services themselves, until keys are added.
+- **AI, Hindsight and TinyFish:** answer quality depends on the provider. Gemini answers have been checked by hand on a few demo questions only.
 - **Compliance:** GSTIN checks cover format and checksum only, not GSTN registration. Sanctions screening and bank verification need a data provider and are shown as "not performed". Contract templates and tax treatment need professional review.
 - **Not built:** email delivery (supplier links are shown in the UI to share), e-signature (status is recorded by hand) and payments (status only; no money moves).
 
@@ -81,7 +110,10 @@ orrfin/            Python backend: models, migrations, services, API routers, wo
   erp/             outbox, Zoho Books adapter, Tally XML
   migrations/      Alembic: schema, grants, RLS policies and business-rule triggers
 mock_erp/          local ERP stand-in for tests and the demo
-app/               Next.js UI (product screens under app/app, supplier portal under app/portal)
+app/               Next.js UI: landing page (page.tsx, landing.css, components/landing),
+                   product screens under app/app, supplier portal under app/portal,
+                   shared shell, UI kit and per-screen workflow guides in components/
+public/landing/    landing photographs (with credits.json) and product screenshots
 tools/             bootstrap_env.py, stack.py, tally_relay.py
 tests/             end-to-end tests run inside the stack
 ```

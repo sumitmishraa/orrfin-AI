@@ -234,7 +234,7 @@ export function Spines() {
             );
           })}
         </div>
-        <p className="ol-deck-foot"><span>Eight rules, enforced in the database or by design.</span><a href="/login">Try to break one in the demo</a></p>
+        <p className="ol-deck-foot"><span>Eight rules, enforced in the database or by design.</span><a href="/demo">Try to break one in the demo</a></p>
       </div>
     </section>
   );
