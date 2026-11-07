@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 Email = Annotated[str, Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$", max_length=255)]
 
 _attempts: dict[str, deque] = defaultdict(deque)
-MAX_ATTEMPTS_PER_MINUTE = 20
+MAX_ATTEMPTS_PER_MINUTE = settings.auth_attempts_per_minute
 LOCK_AFTER_FAILURES = 8
 LOCK_MINUTES = 15
 

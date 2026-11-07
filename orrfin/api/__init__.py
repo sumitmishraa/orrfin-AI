@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
-from orrfin.api import auth
+from orrfin.api import approvals, auth, intake, orders, org
 from orrfin.api.deps import public
 from orrfin.config import settings
 from orrfin.db import assert_safe_role
@@ -61,3 +61,7 @@ def health():
 
 
 app.include_router(auth.router)
+app.include_router(org.router)
+app.include_router(intake.router)
+app.include_router(approvals.router)
+app.include_router(orders.router)

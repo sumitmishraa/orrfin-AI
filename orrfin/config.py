@@ -23,6 +23,7 @@ class Settings:
     cookie_secure: bool = _flag("COOKIE_SECURE")
     allow_signup: bool = _flag("ORRFIN_ALLOW_SIGNUP", "1")
     session_hours: int = int(os.getenv("ORRFIN_SESSION_HOURS", "12"))
+    auth_attempts_per_minute: int = int(os.getenv("ORRFIN_AUTH_RATE_PER_MINUTE", "20"))
 
     allow_mock_erp: bool = _flag("ORRFIN_ALLOW_MOCK_ERP")
     mock_erp_url: str = os.getenv("MOCK_ERP_URL", "http://mock-erp:9100")
