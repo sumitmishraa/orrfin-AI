@@ -8,6 +8,8 @@ BEGIN
     'pilot_organizations', 'pilot_members', 'pilot_vendors', 'pilot_requests',
     'pilot_invitations', 'pilot_quotes', 'pilot_orders', 'pilot_receipts',
     'pilot_invoices', 'pilot_audit', 'pilot_memory_events',
+    'orrfin_branches', 'orrfin_approval_rules', 'orrfin_intakes', 'orrfin_supplier_reviews',
+    'orrfin_contracts', 'orrfin_contract_versions', 'orrfin_erp_previews', 'orrfin_onboarding_links', 'orrfin_org_consent',
     'suppliers', 'events', 'decisions'
   ] LOOP
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', table_name);

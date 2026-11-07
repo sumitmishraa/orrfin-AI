@@ -1,6 +1,18 @@
-# VendorMind
+# Orrfin AI
 
-VendorMind connects supplier discovery, quote requests, purchase orders, delivery receipts and three-way invoice matching. The landing page and a separate fictional-data demo remain available alongside an organization-scoped pilot workspace.
+Orrfin AI connects supplier discovery, quote requests, purchase orders, delivery receipts and three-way invoice matching. The landing page and a separate fictional-data demo remain available alongside an organization-scoped pilot workspace.
+
+## Multi-branch preview status
+
+The **Multi-branch platform** tab includes a fictional ten-branch organization, branch creation and CSV import, owner-reviewed intake, branch/category/amount routing labels, a supplier risk register, supplier onboarding links and questionnaires, contract text versioning with literal keyword excerpts, workspace record search, and local Zoho purchase-order mapping previews. An approved intake creates a sourcing request. The purchase-order view offers a downloadable PDF. Existing sourcing, supplier portal, delivery and structured three-way matching remain available.
+
+Supplier research can call TinyFish only on an explicit buyer request, using `TINYFISH_API_KEY` in the backend. Results are unverified and must be reviewed. The optional Groq-based assistant requires both `GROQ_API_KEY` and organization consent; it sends a question and matching record excerpts, validates source IDs, and cannot initiate transactions. Neither service is contacted from the fictional demo. Live provider access remains unverified.
+
+Searchable PDFs can be read as unverified page text. For scanned PDFs, install Tesseract on the API host, set `ORRFIN_OCR_ENABLED=1`, and optionally set `TESSERACT_CMD` to its executable. OCR is bounded to 10 scanned pages and output must be checked against the original. Invoice matching still uses supplier-entered structured values; PDF fields are not extracted into or automatically compared with those records.
+
+This remains an **incomplete preview**, not production-ready. The existing pilot authorizes at organization level; branch-specific authorization, enforceable assigned approvers, approval delegation and multi-branch requests are not implemented. The approval label identifies a team but does not authenticate that team. Contract checks are keyword searches on pasted text, not legal advice or AI clause analysis; private file/version storage, a configurable playbook and suggested revisions are not implemented. Onboarding does not yet collect document attachments or enforce branch availability. ERP previews are local only: Zoho, SAP and Tally adapters, mapping validation, delivery/retry/reconciliation and sandbox tests remain outstanding. Automated structured PDF extraction and correction remain outstanding. Do not enable real pilot access until these gaps and security, integration, backup, load and operational checks are resolved.
+
+The synthetic demo is shared and uses fictional records. It does not imply affiliation with any real company. No external ERP action is performed. New database tables must be included in reviewed RLS setup before a deployment; `backend/enable_rls.sql` is a draft, not proof that it has been applied.
 
 ## Pilot setup
 
@@ -35,6 +47,6 @@ Supplier tokens are held in URL fragments and sent in a request header, stored o
 
 ## Validation and limitations
 
-Run `python -m pytest backend/test_app.py backend/test_pilot.py`, `npm run build` and `npm audit --omit=dev`. The tests exercise the API with synthetic data and mocked authentication; they do **not** replace a live Supabase/RLS, real-storage, Google Places, Hindsight or deployment test. The current version has no organization-invite UI, accounting/ERP integration, automated invoice extraction, payment processing or self-service retention/deletion controls. Review the privacy and pilot terms, access controls, recovery procedures and hosting costs before onboarding real organizations.
+Run `python -m pytest backend/test_app.py backend/test_pilot.py backend/test_enterprise.py`, `npm run build` and `npm audit --omit=dev`. The tests exercise the API with synthetic data and mocked authentication; they do **not** replace a live Supabase/RLS, real-storage, Google Places, Hindsight or deployment test. The current version has no organization-invite UI, ERP delivery integration, automated structured invoice extraction, payment processing or self-service retention/deletion controls. Review the privacy and pilot terms, access controls, recovery procedures and hosting costs before onboarding real organizations.
 
 The supplied `render.yaml` describes a frontend and private API using externally supplied Supabase database credentials. It does not create the Supabase project. Its `PILOT_RLS_READY` default is deliberately off. Review the provider plan and costs before applying it.

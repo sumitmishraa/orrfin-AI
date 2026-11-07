@@ -51,7 +51,7 @@ class Decision(Base):
     result: Mapped[dict] = mapped_column(JSON)
     review: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
-app = FastAPI(title='VendorMind API')
+app = FastAPI(title='Orrfin AI API')
 login_attempts = defaultdict(deque)
 Base.metadata.create_all(engine)
 
@@ -237,3 +237,10 @@ def replay(decision_id: str):
 from backend.pilot import router as pilot_router
 Base.metadata.create_all(engine)
 app.include_router(pilot_router)
+from backend.enterprise import router as enterprise_router
+Base.metadata.create_all(engine)
+app.include_router(enterprise_router)
+
+from backend.extensions import router as extensions_router
+Base.metadata.create_all(engine)
+app.include_router(extensions_router)

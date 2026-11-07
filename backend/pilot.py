@@ -278,7 +278,9 @@ def reset_demo(user:str=Depends(bearer_user)):
     if user!=DEMO_USER: raise HTTPException(403,'Demo access required.')
     with DEMO_SEED_LOCK:
         with Session.begin() as db:
-            for model in (MemoryEvent,Audit,Invoice,Receipt,Order,Quote,Invitation,PurchaseRequest,Vendor,Member):
+            from backend.enterprise import SupplierReview, Intake, ApprovalRule, Branch
+            from backend.extensions import ContractVersion, Contract, ERPPreview, OnboardingLink, OrgConsent
+            for model in (OrgConsent, OnboardingLink, ERPPreview, ContractVersion, Contract, SupplierReview, Intake, ApprovalRule, Branch, MemoryEvent,Audit,Invoice,Receipt,Order,Quote,Invitation,PurchaseRequest,Vendor,Member):
                 db.execute(delete(model).where(model.org_id==DEMO_ORG))
             db.execute(delete(Organization).where(Organization.id==DEMO_ORG))
         DEMO_ATTACHMENTS.clear()
@@ -559,3 +561,67 @@ def retry_memory(org_id:str,user:str=Depends(require_org)):
 @router.get('/{org_id}/audit')
 def history(org_id:str,user:str=Depends(require_org)):
     with Session() as db: return [{'id':a.id,'subject_id':a.subject_id,'action':a.action,'created_at':a.created_at.isoformat()} for a in db.scalars(select(Audit).where(Audit.org_id==org_id).order_by(Audit.created_at.desc()).limit(100)).all()]
+
+
+@router.get('/{org_id}/orders/{order_id}/pdf')
+def purchase_order_pdf(org_id:str,order_id:str,user:str=Depends(require_org)):
+    """Generate a downloadable PDF from the stored, approved purchase order."""
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from xml.sax.saxutils import escape
+    with Session() as db:
+        order=get_owned(db,Order,order_id,org_id)
+        vendor=get_owned(db,Vendor,order.vendor_id,org_id)
+        request=get_owned(db,PurchaseRequest,order.request_id,org_id)
+        out=io.BytesIO();styles=getSampleStyleSheet()
+        document=SimpleDocTemplate(out,topMargin=40,bottomMargin=40)
+        story=[Paragraph('ORRFIN AI / PURCHASE ORDER',styles['Title']),Spacer(1,12),Paragraph(escape(order.id),styles['Normal']),Paragraph('Supplier: '+escape(vendor.name),styles['Normal']),Paragraph('Delivery: '+escape(request.location),styles['Normal']),Paragraph('Required by: '+escape(request.deadline),styles['Normal']),Spacer(1,18)]
+        rows=[['Item','Quantity','Unit price','Amount']]
+        for line in order.lines:
+            amount=Decimal(line['quantity'])*Decimal(line['unit_price'])
+            rows.append([Paragraph(escape(line['description']),styles['Normal']),line['quantity']+' '+line['unit'],order.currency+' '+line['unit_price'],order.currency+' '+str(amount.quantize(Decimal('.01'),rounding=ROUND_HALF_UP))])
+        table=Table(rows,colWidths=[230,85,90,95],repeatRows=1)
+        table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#dceac6')),('GRID',(0,0),(-1,-1),.3,colors.HexColor('#b6c4b4')),('VALIGN',(0,0),(-1,-1),'TOP'),('TOPPADDING',(0,0),(-1,-1),8),('BOTTOMPADDING',(0,0),(-1,-1),8)]))
+        story += [table,Spacer(1,15),Paragraph(f'Tax: {escape(order.currency)} {escape(order.tax)}',styles['Normal']),Paragraph(f'Freight: {escape(order.currency)} {escape(order.freight)}',styles['Normal']),Paragraph(f'Total: {escape(order.currency)} {escape(order.total)}',styles['Heading2'])]
+        if org_id==DEMO_ORG:story.append(Paragraph('FICTIONAL TRAINING DATA — NOT A REAL PURCHASE ORDER',styles['Normal']))
+        document.build(story)
+    return Response(out.getvalue(),media_type='application/pdf',headers={'Content-Disposition':f'attachment; filename="purchase-order-{order_id}.pdf"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'})
+
+@router.get('/{org_id}/invoices/{invoice_id}/pdf-text')
+def invoice_pdf_text(org_id:str,invoice_id:str,user:str=Depends(require_org)):
+    """Expose page-numbered text for review; never use unverified text for matching."""
+    from pypdf import PdfReader
+    with Session() as db:
+        invoice=get_owned(db,Invoice,invoice_id,org_id)
+        path=invoice.attachment_path
+    if not path: raise HTTPException(404,'No invoice attachment.')
+    if org_id==DEMO_ORG:
+        item=DEMO_ATTACHMENTS.get(invoice_id)
+        if not item: raise HTTPException(404,'Sample attachment is no longer available.')
+        raw,content_type=item
+        if content_type!='application/pdf': raise HTTPException(422,'Text extraction requires a PDF.')
+    else:
+        if not path.endswith('.pdf'): raise HTTPException(422,'Text extraction requires a PDF.')
+        url=os.getenv('SUPABASE_URL','').rstrip('/');key=os.getenv('SUPABASE_SERVICE_ROLE_KEY','');bucket=os.getenv('SUPABASE_STORAGE_BUCKET','vendormind-invoices')
+        if not url or not key: raise HTTPException(503,'Private document storage is not configured.')
+        try:
+            result=httpx.get(f'{url}/storage/v1/object/{bucket}/{path}',headers={'Authorization':f'Bearer {key}','apikey':key},timeout=15)
+            result.raise_for_status();raw=result.content
+        except Exception: raise HTTPException(503,'Unable to read the invoice attachment.')
+    if len(raw)>5*1024*1024:raise HTTPException(413,'Invoice exceeds the extraction limit.')
+    try:
+        reader=PdfReader(io.BytesIO(raw),strict=False)
+        if reader.is_encrypted: raise HTTPException(422,'Encrypted PDFs cannot be extracted.')
+        if len(reader.pages)>30: raise HTTPException(422,'Invoice exceeds the 30-page extraction limit.')
+        pages=[{'page':n+1,'text':(page.extract_text() or '')[:12000],'source':'pdf_text'} for n,page in enumerate(reader.pages)]
+    except HTTPException: raise
+    except Exception: raise HTTPException(422,'Could not read this PDF.')
+    blank=[n for n,p in enumerate(pages) if not p['text'].strip()]
+    ocr_status='not_needed'
+    if blank:
+        from backend.ocr import ocr_pdf_pages
+        ocr,ocr_status=ocr_pdf_pages(raw,blank)
+        for n,text in ocr.items():
+            pages[n]['text']=text;pages[n]['source']='ocr'
+    return {'pages':pages,'status':'text_extracted' if any(p['text'].strip() for p in pages) else 'ocr_unavailable','ocr_status':ocr_status,'notice':'Extracted text is unverified and does not change invoice matching. Confirm all fields against the original document.'}
