@@ -25,9 +25,14 @@ def _ignore(_directory: str, names: list[str]) -> set[str]:
 
 
 def sync() -> None:
-    if BUILD_DIR.exists():
-        shutil.rmtree(BUILD_DIR)
-    shutil.copytree(ROOT, BUILD_DIR, ignore=_ignore)
+    """Replaces the folder's contents, not the folder, so it works even if a shell is open in it."""
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    for child in BUILD_DIR.iterdir():
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+    shutil.copytree(ROOT, BUILD_DIR, ignore=_ignore, dirs_exist_ok=True)
 
 
 def main() -> int:

@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
-from orrfin.api import approvals, auth, intake, orders, org
+from orrfin.api import approvals, auth, concierge, contracts, dashboard, erp, intake, invoices, orders, org, portal, risk, sourcing, suppliers
 from orrfin.api.deps import public
 from orrfin.config import settings
 from orrfin.db import assert_safe_role
@@ -65,3 +65,12 @@ app.include_router(org.router)
 app.include_router(intake.router)
 app.include_router(approvals.router)
 app.include_router(orders.router)
+app.include_router(invoices.router)
+app.include_router(erp.router)
+app.include_router(suppliers.router)
+app.include_router(risk.router)
+app.include_router(sourcing.router)
+app.include_router(portal.router)
+app.include_router(contracts.router)
+app.include_router(concierge.router)
+app.include_router(dashboard.router)

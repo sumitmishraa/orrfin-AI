@@ -50,7 +50,7 @@ def parse_decimal(value) -> Decimal | None:
     if value is None:
         return None
     text = str(value).strip()
-    negative = text.startswith("(") and text.endswith(")") or text.startswith("-")
+    negative = (text.startswith("(") and text.endswith(")")) or bool(re.search(r"-\s*(?:Rs\.?\s*|INR\s*|₹\s*)?\d", text))
     found = re.search(r"\d[\d,]*(?:\.\d+)?", text)
     if not found:
         return None

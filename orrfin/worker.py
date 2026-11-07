@@ -22,6 +22,7 @@ LEASE = timedelta(minutes=5)
 POLL_SECONDS = 1.0
 SCAN_EVERY_SECONDS = 300
 MAX_ATTEMPTS = 6
+BACKOFF_SCALE = float(__import__("os").getenv("ORRFIN_JOB_BACKOFF_SCALE", "1"))
 
 _handlers: dict = {}
 _running = True
@@ -79,7 +80,7 @@ def _finish(job_id: UUID, error: str | None, attempts: int) -> None:
             job.status, job.finished_at, job.last_error = "failed", now, error[-2000:]
         else:
             job.status, job.last_error = "queued", error[-2000:]
-            job.run_after = now + timedelta(seconds=min(300, 2**attempts))
+            job.run_after = now + timedelta(seconds=min(300, 2**attempts) * BACKOFF_SCALE)
 
 
 def run_once() -> bool:
@@ -151,4 +152,8 @@ def healthcheck() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(healthcheck()) if "--healthcheck" in sys.argv else main()
+    # Run through the importable module, not __main__, so handlers registered by orrfin.jobs
+    # land in the same registry this loop reads.
+    import orrfin.worker as worker_module
+
+    sys.exit(worker_module.healthcheck()) if "--healthcheck" in sys.argv else worker_module.main()

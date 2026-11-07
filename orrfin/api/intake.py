@@ -195,6 +195,8 @@ def submit_intake(db: Session, actor, intake: Intake, at: datetime | None = None
         raise HTTPException(409, "This request has already been submitted.")
     supplier = db.get(Supplier, intake.preferred_supplier_id) if intake.preferred_supplier_id else None
     extra = ("finance_ap",) if intake.budget_check.get("status") == "over" else ()
+    if supplier and supplier.risk_tier in ("high", "critical"):
+        extra += ("risk",)
     instance = approvals.submit(
         db,
         actor,

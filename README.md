@@ -1,52 +1,87 @@
-# Orrfin AI
+# Orrfin.ai
 
-Orrfin AI connects supplier discovery, quote requests, purchase orders, delivery receipts and three-way invoice matching. The landing page and a separate fictional-data demo remain available alongside an organization-scoped pilot workspace.
+Procurement orchestration for multi-branch businesses. One governed workflow from a store's request to a matched invoice pushed to the ERP:
 
-## Multi-branch preview status
+| Product | What it does |
+|---|---|
+| **Intake-to-Procure** | Branch requests with budget checks, preferred-supplier and contract suggestions, and multi-step approvals routed by branch, category, amount and supplier risk. A requester can never approve their own request; the database enforces it. |
+| **Sourcing** | RFQs sent to suppliers through private links. Bids are compared by total incl. GST, lead time, risk and real delivery history; the award creates the PO. |
+| **Procure-to-Pay** | Gapless PO numbers per branch and fiscal year (`PO/BLR/2026-27/000123`), CGST+SGST or IGST by place of supply, downloadable PO PDFs, change orders, goods receipts, invoice PDF upload, extraction, human confirmation, three-way matching, exceptions, approval and payment status. |
+| **Supplier Onboarding** | A supplier portal for GSTIN, PAN, bank details (only the last four digits are kept), certificates and documents, with automated checks and review. |
+| **Risk Orchestration** | Explainable scores from onboarding, documents, delivery, quality, invoice accuracy and spend concentration. High risk adds a risk approver; critical risk places a hold that blocks POs and payments in the database. |
+| **AI Contract Orchestration** | Contracts generated from a clause library as Word or PDF, counterparty PDFs uploaded, versions compared, clause-by-clause review, obligations and renewal alerts. |
+| **AI Procurement Concierge** | Questions answered from your own records with citations. It can draft a request; a person submits it. |
+| **ERP push** | Issued POs and approved invoices go to Zoho Books through an idempotent outbox, and to Tally Prime as XML or through a relay agent that runs next to Tally. |
 
-The **Multi-branch platform** tab includes a fictional ten-branch organization, branch creation and CSV import, owner-reviewed intake, branch/category/amount routing labels, a supplier risk register, supplier onboarding links and questionnaires, contract text versioning with literal keyword excerpts, workspace record search, and local Zoho purchase-order mapping previews. An approved intake creates a sourcing request. The purchase-order view offers a downloadable PDF. Existing sourcing, supplier portal, delivery and structured three-way matching remain available.
+The product is in Python (FastAPI, SQLAlchemy, Alembic, worker) with a Next.js UI, on PostgreSQL with row-level security, all in Docker.
 
-Supplier research can call TinyFish only on an explicit buyer request, using `TINYFISH_API_KEY` in the backend. Results are unverified and must be reviewed. The optional Groq-based assistant requires both `GROQ_API_KEY` and organization consent; it sends a question and matching record excerpts, validates source IDs, and cannot initiate transactions. Neither service is contacted from the fictional demo. Live provider access remains unverified.
+## Run it
 
-Searchable PDFs can be read as unverified page text. For scanned PDFs, install Tesseract on the API host, set `ORRFIN_OCR_ENABLED=1`, and optionally set `TESSERACT_CMD` to its executable. OCR is bounded to 10 scanned pages and output must be checked against the original. Invoice matching still uses supplier-entered structured values; PDF fields are not extracted into or automatically compared with those records.
+You need Docker Desktop and Python 3.10+.
 
-This remains an **incomplete preview**, not production-ready. The existing pilot authorizes at organization level; branch-specific authorization, enforceable assigned approvers, approval delegation and multi-branch requests are not implemented. The approval label identifies a team but does not authenticate that team. Contract checks are keyword searches on pasted text, not legal advice or AI clause analysis; private file/version storage, a configurable playbook and suggested revisions are not implemented. Onboarding does not yet collect document attachments or enforce branch availability. ERP previews are local only: Zoho, SAP and Tally adapters, mapping validation, delivery/retry/reconciliation and sandbox tests remain outstanding. Automated structured PDF extraction and correction remain outstanding. Do not enable real pilot access until these gaps and security, integration, backup, load and operational checks are resolved.
-
-The synthetic demo is shared and uses fictional records. It does not imply affiliation with any real company. No external ERP action is performed. New database tables must be included in reviewed RLS setup before a deployment; `backend/enable_rls.sql` is a draft, not proof that it has been applied.
-
-## Pilot setup
-
-The pilot is intentionally disabled until a **dedicated** Supabase project and database isolation are configured. Do not point it at an unrelated project or enable it for real records before verification.
-
-1. Install Node.js 20+ and Python 3.10+. Run `npm ci` and `python -m pip install -r backend/requirements.txt`.
-2. Create a dedicated Supabase project. Set `DATABASE_URL` to its PostgreSQL connection string, `SUPABASE_URL` to its project URL, `SUPABASE_ANON_KEY` to its publishable/anon key, and `SUPABASE_SERVICE_ROLE_KEY` to its secret server-only key. Never expose the service key to the browser or commit it.
-3. Configure Supabase Auth email magic links, the site's URL and redirect URL (`/workspace`), and a production SMTP provider. Configure a **private** Storage bucket named `vendormind-invoices`.
-4. Restrict or disable Supabase Data API access during setup. Start the backend once with `PILOT_RLS_READY=0` so the tables are created. Apply and review `backend/enable_rls.sql` to the dedicated database, then verify row-level security, revoked Data API privileges and cross-organization isolation. Only after verification set `PILOT_RLS_READY=1` and restart the backend. FastAPI's direct database role is trusted and application authorization checks must remain enabled.
-5. Set `PUBLIC_APP_URL` to the public HTTPS frontend URL; it is used for supplier links. Set `COOKIE_SECURE=1` for HTTPS. Keep the API private behind the frontend proxy; use `--no-access-log` when starting the backend.
-6. For live supplier discovery, create a restricted, billing-enabled Google Places API key and set `GOOGLE_PLACES_API_KEY` on the backend. The application shows Google Maps attribution and retains only the selected Place ID; supplier information is entered independently by buyers.
-7. Add a **replacement** Hindsight Cloud key as `HINDSIGHT_API_KEY` on the backend, not in source control or browser code. Each workspace uses its own memory bank and retains only pseudonymous supplier/event IDs and source references. Memory writes are retriable from the workspace. Hindsight is optional for the structured workflow but required to verify the memory integration.
-
-Set environment variables on the hosting provider or in the backend shell; `.env.example` lists names without secrets. The default local SQLite database is for the fictional demo, not pilot records. Real Hindsight, Google Places, Supabase Auth, Storage and PostgreSQL must be configured before end-to-end service verification.
-
-## Local fictional demo
-
-Set `DEMO_PASSWORD` and a unique long `SESSION_SECRET` in the backend environment, then run:
-
-```text
-python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000 --no-access-log
-npm run dev
+```powershell
+python tools/bootstrap_env.py          # creates .env with generated secrets (values are never printed)
+python tools/stack.py up -d --wait --build
+docker compose -p orrfin-platform exec api python -m orrfin.seed   # optional: the fictional demo company
 ```
 
-Open `http://localhost:3000/demo` and enter the configured demo password. This route now opens the complete supplier, quote, order and invoice workflow with a separate, clearly labelled fictional workspace. It includes example quotes and an invoice mismatch, and lets you create supplier links and try the supplier portal. Use **Reset sample** to restore the examples after exploring; this clears only the shared fictional workspace and its temporary files. Sample search results are fictional, Hindsight is never contacted from this workspace, and sample invoice files are held in temporary server memory only. Never upload real confidential data to this shared demo. The original comparison-only demo remains at `/legacy-demo`. The real pilot is separate at `/workspace`; no supplier messages or purchase orders are sent automatically.
+Open http://localhost:8080. The seed prints the sign-in emails and one shared password.
 
-## Workflow
+**Why `tools/stack.py`:** OneDrive turns synced files into cloud placeholders that Docker's build can't read. The script copies the source to `%LOCALAPPDATA%\orrfin-build` and runs `docker compose` there. In a checkout outside OneDrive, plain `docker compose up -d --wait --build` works.
 
-Buyers add or import suppliers, review and approve their details, create requests with line items, and share individual seven-day supplier links. Suppliers submit prices, tax, freight and lead time; buyers see eligible quotes ordered by total and choose one to create an order. Buyers enter deliveries, including partial quantities, and the supplier enters invoice details and optionally uploads a PDF, PNG or JPEG. The matching view compares order, cumulative receipts and cumulative invoices at line level, including unit price, quantities, tax and freight. Exceptions require a human review; no payment is initiated. The expected invoice draft is not a supplier invoice.
+## Keys (all optional)
 
-Supplier tokens are held in URL fragments and sent in a request header, stored only as hashes on the server, scoped to one supplier/request, expiring and revocable. A new order-stage link can be issued if the original link expires.
+Put them in `.env`. Never commit them; `.env` is gitignored.
 
-## Validation and limitations
+| Variable | Turns on |
+|---|---|
+| `ANTHROPIC_API_KEY` | Contract review summaries and the concierge's written answers (model `claude-opus-5-5`). An admin must also switch AI on under AI Procurement Concierge. |
+| `HINDSIGHT_API_KEY` | Supplier memory: structured events only, never document text. To give Claude Code access to the same memory, run `claude mcp add --transport http hindsight https://api.hindsight.vectorize.io/mcp/orrfin/` and sign in with `/mcp`. |
+| `TINYFISH_API_KEY` | Adverse-media research on a supplier, only when someone clicks Research. |
 
-Run `python -m pytest backend/test_app.py backend/test_pilot.py backend/test_enterprise.py`, `npm run build` and `npm audit --omit=dev`. The tests exercise the API with synthetic data and mocked authentication; they do **not** replace a live Supabase/RLS, real-storage, Google Places, Hindsight or deployment test. The current version has no organization-invite UI, ERP delivery integration, automated structured invoice extraction, payment processing or self-service retention/deletion controls. Review the privacy and pilot terms, access controls, recovery procedures and hosting costs before onboarding real organizations.
+Without them, every screen still works and says what is off rather than showing invented output.
 
-The supplied `render.yaml` describes a frontend and private API using externally supplied Supabase database credentials. It does not create the Supabase project. Its `PILOT_RLS_READY` default is deliberately off. Review the provider plan and costs before applying it.
+## The demo company (fictional)
+
+`python -m orrfin.seed` creates **Kirnova Quick Commerce Pvt. Ltd.**, a fictional quick-commerce operator. It is not modelled on, or affiliated with, any real company:
+
+- 10 regional hubs and 58 sites (dark stores plus a mother warehouse per hub).
+- 9 GST registrations, because Mumbai and Pune share Maharashtra's, which exercises branch-to-entity mapping.
+- 12 categories, about 60 catalogue items and about 150 suppliers across states.
+- A year of history built through the same service code the API uses: requests, approvals, POs, receipts, invoices with planted mismatches, payments.
+- Work in flight: pending approvals, open RFQs with bids, invoice PDFs in several layouts (including scans) waiting for review, contracts near renewal, risk holds, and a mock Zoho connection receiving recent POs.
+- A second organization, so you can see that tenants can't see each other.
+
+GSTINs are checksum-valid by construction and could coincide with real registrations, so every generated document is stamped FICTIONAL.
+
+## Tests
+
+```powershell
+$env:ORRFIN_AUTH_RATE_PER_MINUTE=100000; $env:ORRFIN_JOB_BACKOFF_SCALE=0.1
+python tools/stack.py up -d --wait --build
+python tools/stack.py --profile test run --rm --build tests
+```
+
+They run inside the stack, through the gateway. They cover tenant isolation with forced connection reuse, RLS on every table, permission coverage on every route, gapless numbering under 50 parallel issues, database-enforced self-approval and over-receipt/over-billing limits, PO PDF round-trips, extraction on every invoice layout and on a scan, a golden corpus of planted mismatches, and ERP delivery with lost responses, outages, dead-letter and Tally balancing.
+
+## What is not verified
+
+- **ERP:** live Zoho Books and Tally Prime. Both adapters follow the published docs and are tested against `mock_erp/`, a local stand-in that enforces our reading of those docs. Check the first deliveries in a Zoho sandbox and a real Tally company. The Zoho state codes and tax-ID mapping need confirming there.
+- **Extraction:** accuracy on real supplier invoices. It is tested on generated layouts. Low-confidence fields are flagged, and nothing reaches matching until a person confirms it.
+- **AI, Hindsight and TinyFish:** answer quality and the services themselves, until keys are added.
+- **Compliance:** GSTIN checks cover format and checksum only, not GSTN registration. Sanctions screening and bank verification need a data provider and are shown as "not performed". Contract templates and tax treatment need professional review.
+- **Not built:** email delivery (supplier links are shown in the UI to share), e-signature (status is recorded by hand) and payments (status only; no money moves).
+
+## Layout
+
+```
+orrfin/            Python backend: models, migrations, services, API routers, worker jobs, seed
+  api/             FastAPI routers per product
+  p2p/             PO lifecycle, invoice extraction, three-way matching
+  erp/             outbox, Zoho Books adapter, Tally XML
+  migrations/      Alembic: schema, grants, RLS policies and business-rule triggers
+mock_erp/          local ERP stand-in for tests and the demo
+app/               Next.js UI (product screens under app/app, supplier portal under app/portal)
+tools/             bootstrap_env.py, stack.py, tally_relay.py
+tests/             end-to-end tests run inside the stack
+```

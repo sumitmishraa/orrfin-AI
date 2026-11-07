@@ -160,6 +160,9 @@ def issue(db: Session, actor, po_id: UUID, at: datetime | None = None) -> Purcha
     db.flush()
     po.number = next_number(db, actor.tenant_id, "PO", branch.code, po.fiscal_year)
     audit(db, actor, "po_issued", "purchase_order", po.id, number=po.number, total=po.total)
+    from orrfin.erp.outbox import queue_document
+
+    queue_document(db, actor.tenant_id, "purchase_order", po.id, 0)
     db.add(
         PoRevision(
             tenant_id=actor.tenant_id, po_id=po.id, revision=0, reason="Issued", snapshot=snapshot(db, po), created_by=actor.user_name
@@ -424,6 +427,9 @@ def _apply_change(db: Session, actor, po: PurchaseOrder, changes: list[dict], re
             )
         )
     audit(db, actor, "po_changed", "purchase_order", po.id, revision=po.revision, total=po.total, reason=reason)
+    from orrfin.erp.outbox import queue_document
+
+    queue_document(db, po.tenant_id, "purchase_order", po.id, po.revision)
     db.flush()
     db.expire(po)
     refresh_status(db, po.id)

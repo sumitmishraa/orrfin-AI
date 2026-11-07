@@ -114,6 +114,18 @@ def change_order(po_id: UUID, data: ChangeIn, ctx: Ctx = Depends(require("po.wri
         return out(service.request_change(db, ctx, po_id, changes, data.reason))
 
 
+@router.post("/{po_id}/supplier-link", status_code=201)
+def supplier_link(po_id: UUID, ctx: Ctx = Depends(require("po.write"))):
+    from orrfin import portal
+
+    with ctx.tx() as db:
+        po = _visible(ctx, owned(db, PurchaseOrder, po_id))
+        if not po.number:
+            raise HTTPException(409, "Issue the purchase order before sharing it.")
+        audit(db, ctx, "po_supplier_link_created", "purchase_order", po.id)
+    return {"url": portal.link("po", portal.issue(ctx.tenant_id, "po", po_id, days=90)), "notice": "The supplier can view this PO, download its PDF and upload invoices. The link expires in 90 days."}
+
+
 @router.post("/{po_id}/cancel")
 def cancel(po_id: UUID, ctx: Ctx = Depends(require("po.write"))):
     with ctx.tx() as db:
