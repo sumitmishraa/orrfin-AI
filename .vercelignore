@@ -1,0 +1,13 @@
+orrfin/
+mock_erp/
+tests/
+tools/
+backend/
+.venv/
+.taste-skill/
+Dockerfile.*
+Caddyfile
+alembic.ini
+requirements.txt
+docker-compose.yml
+*.db

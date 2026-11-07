@@ -7,6 +7,13 @@ import { api } from '../../lib/api';
 
 type Turn = { question: string; answer: any };
 
+const SUGGESTIONS = [
+  'Which Pune purchase orders are still waiting for delivery?',
+  'Which invoices have open exceptions, and why?',
+  'How reliable is our top packaging supplier?',
+  'I need 40 insulated delivery bags for Pune next week.',
+];
+
 export default function Concierge() {
   const me = useMe();
   const status = useLoad(() => api('/api/concierge/status'));
@@ -15,23 +22,27 @@ export default function Concierge() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const { busy, message, run } = useAction();
 
-  async function ask(event: FormEvent) {
-    event.preventDefault();
-    const answer = await run(() => api('/api/concierge/ask', { body: { question } }));
-    if (answer) { setTurns([...turns, { question, answer }]); setQuestion(''); drafts.reload(); }
+  async function send(text: string) {
+    const answer = await run(() => api('/api/concierge/ask', { body: { question: text } }));
+    if (answer) { setTurns((all) => [...all, { question: text, answer }]); setQuestion(''); drafts.reload(); }
   }
+  function ask(event: FormEvent) { event.preventDefault(); send(question); }
   const s = status.data;
 
   return (
     <Page kicker="AI Procurement Concierge" title="Ask about your procurement" subtitle="Answers come only from your organization's records and cite them. The concierge can draft a request for you to review; it can't approve, pay or send anything."
       actions={can(me, 'ai.manage') && s && <button className="button secondary" disabled={busy || !s.configured} onClick={() => run(() => api('/api/concierge/consent', { body: { enabled: !s.enabled } })).then(status.reload)}>{s.enabled ? 'Turn AI off' : 'Turn AI on'}</button>}>
       <Message message={message} />
-      {s && !s.available && <Notice>{s.configured ? 'AI is configured but switched off for this organization, so you get matching records instead of written answers.' : `AI isn't configured on this server (provider ${s.provider}). Add ANTHROPIC_API_KEY to .env to enable written answers. Search still works.`}</Notice>}
+      {s && !s.available && <Notice>{s.configured ? 'AI is configured but switched off for this organization, so you get matching records instead of written answers.' : 'AI is not configured on this server. Add GEMINI_API_KEY or ANTHROPIC_API_KEY to .env to get written answers; until then you get matching records.'}</Notice>}
       <Card>
         <form className="ask" onSubmit={ask}>
           <input aria-label="Question" placeholder="e.g. Which Pune purchase orders are still waiting for delivery? Or: I need 40 insulated bags for Koramangala next week." value={question} onChange={(e) => setQuestion(e.target.value)} />
-          <button className="button" disabled={busy || question.length < 2}>{busy ? 'Thinking…' : 'Ask'}</button>
+          <button className="button" disabled={busy || question.length < 2}>{busy ? 'Looking through your records…' : 'Ask'}</button>
         </form>
+        {turns.length === 0 && <div className="suggest" aria-label="Example questions">
+          {SUGGESTIONS.map((q) => <button key={q} type="button" disabled={busy} onClick={() => { setQuestion(q); send(q); }}>{q}</button>)}
+        </div>}
+        {s?.available && <p className="muted">Answered by {s.provider === 'gemini' ? 'Google Gemini' : s.provider === 'anthropic' ? 'Claude' : s.provider} ({s.model}). Answers can take up to a minute.</p>}
         {turns.map((t, i) => (
           <div key={i} className="turn">
             <p className="q">{t.question}</p>

@@ -99,6 +99,21 @@ TOOLS = [
         "strict": True,
     },
     {
+        "name": "list_purchase_orders",
+        "description": (
+            "List purchase orders, newest first, optionally filtered by branch code (e.g. PUN, BLR) and status. "
+            "Statuses: draft, issued (awaiting delivery), partially_received, received, change_pending, cancelled. "
+            "Use status 'open' for everything still awaiting delivery (issued or partially_received), and 'all' for no filter."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"branch_code": {"type": "string"}, "status": {"type": "string"}},
+            "required": ["branch_code", "status"],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    },
+    {
         "name": "supplier_profile",
         "description": "A supplier's status, risk tier and delivery, quality and invoice-accuracy history, by name.",
         "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"], "additionalProperties": False},
@@ -174,6 +189,30 @@ def executor(db, ctx: Ctx, seen: dict, drafts: list):
                     "invoices": [{"number": row.number, "status": row.status, "total": row.total} for row in invoices],
                 }
             )
+        if name == "list_purchase_orders":
+            query = (
+                select(PurchaseOrder, Supplier.name, Branch.code)
+                .join(Supplier, Supplier.id == PurchaseOrder.supplier_id)
+                .join(Branch, Branch.id == PurchaseOrder.branch_id)
+                .order_by(PurchaseOrder.created_at.desc())
+                .limit(25)
+            )
+            code = str(args.get("branch_code") or "").strip().upper()
+            if code and code not in ("ALL", "ANY"):
+                query = query.where(Branch.code == code)
+            status = str(args.get("status") or "").strip().lower()
+            if status == "open":
+                query = query.where(PurchaseOrder.status.in_(("issued", "partially_received")))
+            elif status and status not in ("all", "any"):
+                query = query.where(PurchaseOrder.status == status)
+            if ctx.branch_ids is not None:
+                query = query.where(PurchaseOrder.branch_id.in_(ctx.branch_ids))
+            rows = [
+                {"type": "purchase_order", "id": str(po.id), "ref": po.number or "draft", "label": supplier, "branch": branch, "status": po.status,
+                 "total": str(po.total), "needed_by": str(po.needed_by) if po.needed_by else None, "link": f"/app/orders/{po.id}"}
+                for po, supplier, branch in db.execute(query)
+            ]
+            return {"purchase_orders": remember(rows)}
         if name == "supplier_profile":
             if ctx.role in ("requester",):
                 return {"error": "Your role can't view supplier profiles."}

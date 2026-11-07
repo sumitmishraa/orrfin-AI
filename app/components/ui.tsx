@@ -1,6 +1,8 @@
 'use client';
 import { ReactNode, useCallback, useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, CircleDashed, Clock, Info, XCircle } from 'lucide-react';
+import { guideFor } from './guides';
 
 export function useLoad<T = any>(load: () => Promise<T>, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
@@ -29,12 +31,14 @@ export function useAction() {
 }
 
 export function Page({ title, kicker, subtitle, actions, children }: { title: string; kicker?: string; subtitle?: string; actions?: ReactNode; children: ReactNode }) {
+  const guide = guideFor(usePathname());
   return (
     <div className="page">
       <header className="page-head">
         <div>{kicker && <p className="kicker">{kicker}</p>}<h1>{title}</h1>{subtitle && <p className="subtitle">{subtitle}</p>}</div>
         {actions && <div className="page-actions">{actions}</div>}
       </header>
+      {guide && <Guide id={guide.id} title={guide.spec.title} steps={guide.spec.steps} here={guide.spec.here} />}
       {children}
     </div>
   );
@@ -52,7 +56,8 @@ export function Card({ title, actions, children, className = '' }: { title?: str
 export type Column<T> = { key: string; label: string; render?: (row: T) => ReactNode; align?: 'right' };
 
 export function Table<T = any>({ rows, columns, empty = 'Nothing here yet.', onRow }: { rows: T[] | undefined | null; columns: Column<T>[]; empty?: string; onRow?: (row: T) => void }) {
-  if (!rows || rows.length === 0) return <p className="empty">{empty}</p>;
+  if (rows === undefined || rows === null) return <p className="empty">Loading…</p>;
+  if (rows.length === 0) return <p className="empty">{empty}</p>;
   return (
     <div className="table-wrap">
       <table>
@@ -109,4 +114,22 @@ export function Tabs({ tabs, value, onChange }: { tabs: [string, string][]; valu
 
 export function DownloadLink({ href, children }: { href: string; children: ReactNode }) {
   return <a className="button secondary" href={href} download>{children}</a>;
+}
+
+/**
+ * "How this works" strip under a page title: the steps of this workflow and who does each one.
+ * `here` marks the step this screen is for. People can hide it; the choice is remembered per screen.
+ */
+export function Guide({ id, title = 'How this works', steps, here }: { id: string; title?: string; steps: [string, string][]; here?: number }) {
+  const key = `orrfin.guide.${id}`;
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => { try { setHidden(localStorage.getItem(key) === 'hidden'); } catch { /* storage blocked: keep showing */ } }, [key]);
+  const toggle = (value: boolean) => { setHidden(value); try { localStorage.setItem(key, value ? 'hidden' : 'shown'); } catch { /* ignore */ } };
+  if (hidden) return <p className="muted" style={{ marginTop: -8 }}><button className="link" onClick={() => toggle(false)}>Show how this works</button></p>;
+  return (
+    <section className="guide" aria-label={title}>
+      <div className="guide-head"><strong>{title}</strong><button className="link" onClick={() => toggle(true)}>Hide</button></div>
+      <ol>{steps.map(([who, what], n) => <li key={n} className={n === here ? 'here' : ''}><b>{who}</b><span>{what}</span></li>)}</ol>
+    </section>
+  );
 }

@@ -30,17 +30,35 @@ class Settings:
 
     ocr_enabled: bool = _flag("ORRFIN_OCR_ENABLED", "1")
 
-    ai_provider: str = os.getenv("ORRFIN_AI_PROVIDER", "anthropic")
+    # Empty means "use whichever key is configured": Anthropic, then Gemini, then Groq.
+    ai_provider_setting: str = os.getenv("ORRFIN_AI_PROVIDER", "").strip().lower()
     ai_model: str = os.getenv("ORRFIN_AI_MODEL", "")
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
     groq_api_key: str = os.getenv("GROQ_API_KEY", "")
     groq_model: str = os.getenv("GROQ_MODEL", "")
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "") or os.getenv("Gemini_API_KEY", "")
+    gemini_model: str = os.getenv("GEMINI_MODEL", "")
 
     tinyfish_api_key: str = os.getenv("TINYFISH_API_KEY", "")
     hindsight_api_key: str = os.getenv("HINDSIGHT_API_KEY", "")
     hindsight_api_url: str = os.getenv("HINDSIGHT_API_URL", "https://api.hindsight.vectorize.io")
 
     max_upload_bytes: int = 25 * 1024 * 1024
+
+    # One-click sign-in as a seeded persona, for demos. Only ever works for a tenant marked fictional.
+    demo_login: bool = _flag("ORRFIN_DEMO_LOGIN")
+
+    @property
+    def ai_provider(self) -> str:
+        if self.ai_provider_setting:
+            return self.ai_provider_setting
+        if self.anthropic_api_key:
+            return "anthropic"
+        if self.gemini_api_key:
+            return "gemini"
+        if self.groq_api_key:
+            return "groq"
+        return "anthropic"
 
 
 settings = Settings()

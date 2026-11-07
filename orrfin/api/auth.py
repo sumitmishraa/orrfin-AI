@@ -139,6 +139,64 @@ def login(data: LoginIn, request: Request, response: Response):
     raise HTTPException(401, "Incorrect email or password.")
 
 
+DEMO_DOMAIN = "kirnova.example"
+# Fixed allow-list: the demo endpoint can never be pointed at an arbitrary account.
+DEMO_PERSONAS = [
+    {"key": "store", "email": "pun.store1", "label": "Store lead, Pune", "role": "requester", "does": "Raises purchase requests for a dark store and records deliveries."},
+    {"key": "manager", "email": "pun.manager", "label": "Hub manager, Pune", "role": "branch_manager", "does": "Approves requests for the Pune hub and its stores."},
+    {"key": "procurement", "email": "procurement.lead", "label": "Head of procurement", "role": "procurement", "does": "Approves spend, runs RFQs, issues POs and manages suppliers."},
+    {"key": "finance", "email": "ap.lead", "label": "Accounts payable lead", "role": "finance_ap", "does": "Reviews invoices, resolves match exceptions and approves payment."},
+    {"key": "legal", "email": "legal", "label": "Legal counsel", "role": "legal", "does": "Generates, reviews and approves supplier contracts."},
+    {"key": "risk", "email": "risk", "label": "Risk manager", "role": "risk", "does": "Scores suppliers, places holds and runs adverse-media research."},
+    {"key": "admin", "email": "owner", "label": "Company admin", "role": "admin", "does": "Sees everything: org setup, ERP, AI settings and the audit trail."},
+]
+
+
+class DemoIn(BaseModel):
+    persona: str = Field(max_length=40)
+
+
+def _demo_tenant(db) -> Tenant | None:
+    tenant = db.scalar(select(Tenant).where(Tenant.slug == "kirnova-demo"))
+    return tenant if tenant and (tenant.settings or {}).get("fictional") is True else None
+
+
+@router.get("/demo")
+@public
+def demo_personas():
+    if not settings.demo_login:
+        return {"enabled": False, "personas": []}
+    with database.platform_tx() as db:
+        tenant = _demo_tenant(db)
+        company = tenant.name if tenant else None
+    if company is None:
+        return {"enabled": False, "personas": []}
+    personas = [{**{k: v for k, v in p.items() if k != "email"}, "email": f"{p['email']}@{DEMO_DOMAIN}"} for p in DEMO_PERSONAS]
+    return {"enabled": True, "company": company, "personas": personas}
+
+
+@router.post("/demo-login")
+@public
+def demo_login(data: DemoIn, request: Request, response: Response):
+    if not settings.demo_login:
+        raise HTTPException(404, "Not found.")
+    _throttle(request)
+    persona = next((p for p in DEMO_PERSONAS if p["key"] == data.persona), None)
+    if persona is None:
+        raise HTTPException(422, "Unknown demo persona.")
+    with database.platform_tx() as db:
+        tenant = _demo_tenant(db)
+        if tenant is None:
+            raise HTTPException(404, "The demo company isn't seeded on this server.")
+        user = db.scalar(select(User).where(User.email == f"{persona['email']}@{DEMO_DOMAIN}"))
+        membership = user and db.scalar(select(Membership).where(Membership.user_id == user.id, Membership.tenant_id == tenant.id))
+        if not (user and membership and user.is_active):
+            raise HTTPException(404, "That demo persona isn't available.")
+        csrf = _start_session(db, response, user, tenant.id)
+        role = membership.role
+    return {"csrf_token": csrf, "role": role}
+
+
 @router.post("/logout")
 @public
 def logout(response: Response, orrfin_session: str | None = Cookie(default=None)):

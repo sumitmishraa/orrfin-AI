@@ -39,7 +39,7 @@ export default function Invoices() {
           { key: 'total', label: 'Total', align: 'right', render: (r: any) => inr(r.total) },
         ]} />
       </Card>
-      <Card title={`Open exceptions (${exceptions.data?.length ?? 0})`}>
+      <Card title={`Open exceptions (${exceptions.data?.length ?? '…'})`}>
         <Table rows={exceptions.data?.slice(0, 50)} empty="No open exceptions." columns={[
           { key: 'invoice_number', label: 'Invoice', render: (r: any) => <Link href={`/app/invoices/${r.invoice_id}`}>{r.invoice_number}</Link> },
           { key: 'code', label: 'Check', render: (r: any) => <Status value={r.severity} /> }, { key: 'message', label: 'What was found' },

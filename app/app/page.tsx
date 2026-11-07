@@ -28,7 +28,7 @@ export default function Overview() {
             {data.monthly_spend.map((m: any) => (
               <div key={m.month} className="bar-col" title={`${m.month}: ${compactInr(m.spend)} across ${m.orders} orders`}>
                 <div className="bar" style={{ height: `${(Number(m.spend) / max) * 100}%` }} />
-                <span>{m.month.slice(5)}</span>
+                <span>{new Date(`${m.month}-01T00:00:00`).toLocaleDateString('en-IN', { month: 'short' })}</span>
               </div>
             ))}
           </div>

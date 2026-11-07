@@ -121,6 +121,10 @@ def public_research(supplier_id: UUID, data: ResearchIn, ctx: Ctx = Depends(requ
             parts = urlsplit(url)
             if parts.scheme in ("http", "https") and parts.hostname and not parts.username and not parts.password:
                 results.append({"title": str(item.get("title", ""))[:300], "url": url[:2000], "snippet": str(item.get("snippet", ""))[:1000]})
+    except httpx.HTTPStatusError as error:
+        if error.response.status_code in (401, 403):
+            raise HTTPException(503, "TinyFish rejected the API key. Update TINYFISH_API_KEY on the server.") from error
+        raise HTTPException(503, "Public research is unavailable right now. Try again later.") from error
     except (httpx.HTTPError, ValueError) as error:
         raise HTTPException(503, "Public research is unavailable right now. Try again later.") from error
     with ctx.tx() as db:

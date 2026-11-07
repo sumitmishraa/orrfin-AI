@@ -8,6 +8,7 @@ import { api, inr, qty } from '../../../lib/api';
 
 const HEADER = ['number', 'invoice_date', 'supplier_gstin', 'buyer_gstin', 'subtotal', 'cgst', 'sgst', 'igst', 'freight', 'round_off', 'total'] as const;
 const SOURCE: Record<string, string> = { number: 'invoice_number' };
+const LABELS: Record<string, string> = { number: 'Invoice number', invoice_date: 'Invoice date', supplier_gstin: 'Supplier GSTIN', buyer_gstin: 'Buyer GSTIN', subtotal: 'Taxable value', cgst: 'CGST', sgst: 'SGST', igst: 'IGST', freight: 'Freight', round_off: 'Round-off', total: 'Total' };
 
 function Confidence({ value }: { value?: number }) {
   if (value === undefined) return <span className="conf none">not read</span>;
@@ -60,10 +61,10 @@ export default function InvoiceDetail() {
         </Card>
         {form && (
           <Card title={d.confirmed_at ? 'Confirmed fields' : `Check the extracted fields (${d.extraction?.engine?.replace('_', ' ') || 'manual'})`}>
-            <p className="muted">Only fields a person confirms are used for matching. Percentages show how sure the reader is.</p>
+            <p className="muted">Only fields a person confirms are used for matching. The percentage next to each field shows how sure the reader is; check anything below 90%.</p>
             <Field label="Purchase order"><select value={form.po_id} disabled={closed} onChange={set('po_id')}><option value="">Choose…</option>{d.purchase_order && <option value={d.purchase_order.id}>{d.purchase_order.number}</option>}{(orders.data || []).filter((o: any) => o.id !== d.purchase_order?.id).map((o: any) => <option key={o.id} value={o.id}>{o.number} · {o.supplier}</option>)}</select></Field>
             <div className="field-grid">{HEADER.map((k) => (
-              <Field key={k} label={k.replace('_', ' ')}><div className="with-conf"><input value={form[k]} disabled={closed} type={k === 'invoice_date' ? 'date' : 'text'} onChange={set(k)} /><Confidence value={header[SOURCE[k] || k]?.confidence} /></div></Field>
+              <Field key={k} label={LABELS[k]}><div className="with-conf"><input value={form[k]} disabled={closed} type={k === 'invoice_date' ? 'date' : 'text'} onChange={set(k)} />{(!d.confirmed_at || header[SOURCE[k] || k]) && <Confidence value={header[SOURCE[k] || k]?.confidence} />}</div></Field>
             ))}</div>
             <table className="lines"><thead><tr><th>Description</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>
               {form.lines.map((l: any, i: number) => <tr key={i}>{['description', 'hsn', 'quantity', 'unit_price', 'taxable'].map((k) => <td key={k}><input value={l[k]} disabled={closed} onChange={(e) => setLine(i, k, e.target.value)} /></td>)}</tr>)}

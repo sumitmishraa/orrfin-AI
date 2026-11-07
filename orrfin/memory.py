@@ -27,12 +27,18 @@ def bank(tenant_id: UUID) -> str:
     return f"orrfin-{tenant_id}"
 
 
-def deliver_pending(db: Session, tenant_id: UUID, limit: int = 50) -> dict:
+def deliver_pending(db: Session, tenant_id: UUID, limit: int = 10, budget_seconds: float = 4.0) -> dict:
+    """Sends a small batch within a time budget. The scan job shares the single worker with invoice
+    extraction and ERP delivery, so a large backlog must drain over many scans, not block one."""
+    import time
+
     rows = db.scalars(select(MemoryOutbox).where(MemoryOutbox.status.in_(("pending", "failed"))).limit(limit)).all()
     if not configured():
         return {"status": "not_configured", "pending": len(rows)}
-    client, sent = _client(), 0
+    client, sent, started = _client(), 0, time.monotonic()
     for row in rows:
+        if time.monotonic() - started > budget_seconds:
+            break
         supplier = db.get(Supplier, row.supplier_id)
         try:
             client.retain(

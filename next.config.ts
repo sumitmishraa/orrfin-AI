@@ -1,13 +1,14 @@
 import type { NextConfig } from 'next';
 
-// The gateway routes /api to the Python API, so Next.js needs no rewrites.
+// Docker: the Caddy gateway routes /api to the Python API. Vercel: set ORRFIN_API_URL to a hosted
+// backend and /api is proxied there (same origin, so the session cookie stays first-party).
+const apiTarget = process.env.ORRFIN_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:8080' : '');
+
 const config: NextConfig = {
-  output: 'standalone',
-  // In `npm run dev`, send /api to the running Docker stack. In production the gateway does this.
+  output: process.env.VERCEL ? undefined : 'standalone',
   async rewrites() {
-    if (process.env.NODE_ENV !== 'development') return [];
-    const target = process.env.ORRFIN_API_URL || 'http://localhost:8080';
-    return [{ source: '/api/:path*', destination: `${target}/api/:path*` }];
+    if (!apiTarget) return [];
+    return [{ source: '/api/:path*', destination: `${apiTarget.replace(/\/$/, '')}/api/:path*` }];
   },
   async redirects() {
     return ['/demo', '/workspace', '/legacy-demo', '/supplier', '/onboarding'].map((source) => ({ source, destination: '/login', permanent: false }));
