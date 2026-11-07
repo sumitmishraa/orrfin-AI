@@ -68,7 +68,7 @@ Check a build locally the way Vercel runs it: `VERCEL=1 npm run build`.
 
 ## Landing page
 
-`app/page.tsx` with its interactive sections in `app/components/landing/Landing.tsx` and styles in `app/landing.css` (scoped `ol-` classes; app screens use `app/globals.css`). The font is Switzer, self-hosted from `app/fonts/` (Fontshare free licence). Photographs and the street clip in `public/landing/photos/` are openly licensed from Wikimedia Commons; `credits.json` records each source and licence, and the footer credits them. Product screenshots in `public/landing/ui/` come from the demo.
+`app/page.tsx`, with the tabbed product screens and scroll entrances in `app/components/landing/Landing.tsx` and styles in `app/landing.css`. It uses the app's own tokens from `app/globals.css` (navy, brand blue, Archivo) so the page and the product match. Screenshots in `public/landing/ui/` come from the demo company. `/demo` (`app/demo/page.tsx`) is the role picker judges use to enter the app without a password.
 
 ## The demo company (fictional)
 

@@ -1,161 +1,179 @@
 import type { Metadata } from 'next';
-import localFont from 'next/font/local';
-import Image from 'next/image';
+import { Bot, Boxes, CheckCircle2, ClipboardCheck, FileSignature, FileText, Inbox, Network, ShieldAlert, Users } from 'lucide-react';
 import './landing.css';
-import { Board, HeroMedia, Reveal, Rules, Spines, StreetClip } from './components/landing/Landing';
-
-const switzer = localFont({
-  src: [
-    { path: './fonts/switzer-400.woff2', weight: '400' },
-    { path: './fonts/switzer-500.woff2', weight: '500' },
-    { path: './fonts/switzer-600.woff2', weight: '600' },
-  ],
-  variable: '--font-switzer',
-  display: 'swap',
-});
+import { Reveal, Screens } from './components/landing/Landing';
 
 export const metadata: Metadata = {
   title: 'Orrfin.ai: procurement for multi-branch businesses in India',
   description: 'Requests, approvals, purchase orders, goods receipts and invoice matching for every branch, posted to Tally or Zoho Books, with the rules enforced in the database.',
 };
 
-// Real stage lengths for one dark-store purchase: minutes to ask, a day to approve, four days to deliver, a minute to match.
-const WEEK = [
-  { when: 'Two minutes', grow: 12, tone: 'var(--bg)', clause: 'First, a store lead asks for 100 bags; budget and price are checked as they type.' },
-  { when: 'About a day', grow: 15, tone: 'var(--mustard)', clause: 'Then the hub manager and procurement approve in order, within a 24-hour SLA.' },
-  { when: 'Four days with the supplier', grow: 61, tone: '#f3c9c9', clause: 'Next, the supplier delivers and the store records exactly what arrived.' },
-  { when: 'Under a minute', grow: 12, tone: 'var(--surface)', clause: 'Last, the bill is read, matched to the PO and receipt, and posted to Tally.' },
+// A real sequence, shown as an ordered list: who does what, from request to payment.
+const FLOW = [
+  { who: 'Store lead', what: 'Request', text: 'Asks for what the branch needs. Budget and price are checked on submit.' },
+  { who: 'Managers', what: 'Approve', text: 'Approvals route by branch, amount, category and supplier risk.' },
+  { who: 'Procurement', what: 'Order', text: 'Issues a GST-correct PO, or runs an RFQ and awards the best bid.' },
+  { who: 'Store', what: 'Receive', text: 'Records what actually arrived. Over-receipt is refused.' },
+  { who: 'Accounts payable', what: 'Match and pay', text: 'Matches the bill to the PO and receipt, then posts it to the ERP.' },
 ];
 
-const PRODUCTS: { name: string; line: string; tone: string }[] = [
-  { name: 'Intake-to-Procure', line: 'Every branch request, with budget and price checked before anyone approves.', tone: 't-red' },
-  { name: 'Approvals', line: 'Routed by branch, amount, category and supplier risk. Nobody approves their own.', tone: 't-maroon' },
-  { name: 'Sourcing', line: 'RFQs through private supplier links, ranked on total, lead time and delivery history.', tone: 't-mustard' },
-  { name: 'Procure-to-Pay', line: 'GST-correct POs, goods receipts and supplier invoices matched line by line.', tone: 't-slate' },
-  { name: 'Supplier onboarding', line: 'GSTIN, PAN, bank details and certificates, checked before the first payment.', tone: 't-ink' },
-  { name: 'Risk orchestration', line: 'Scores with evidence. Critical risk places a hold the database enforces.', tone: 't-red' },
-  { name: 'Contracts', line: 'Generated from your clause library, reviewed clause by clause, renewals tracked.', tone: 't-mustard' },
-  { name: 'AI concierge', line: 'Questions answered from your records, with citations. It drafts; people submit.', tone: 't-maroon' },
-  { name: 'ERP push', line: 'Issued POs and approved bills reach Zoho Books or Tally Prime exactly once.', tone: 't-slate' },
-  { name: 'One purchase record', line: 'All nine share one trail: who asked, who approved, what arrived and what was paid.', tone: 't-ink' },
+const PRODUCTS = [
+  { icon: Inbox, name: 'Intake-to-Procure', text: 'One place for every branch request, with budget and price checks before approval.' },
+  { icon: ClipboardCheck, name: 'Approvals', text: 'Multi-step routing with SLAs. Nobody can approve their own request.' },
+  { icon: Boxes, name: 'Sourcing', text: 'RFQs through private supplier links, with bids ranked on total, lead time and history.' },
+  { icon: FileText, name: 'Procure-to-Pay', text: 'Gapless PO numbers, goods receipts, invoice reading and three-way matching.' },
+  { icon: Users, name: 'Supplier onboarding', text: 'A portal for GSTIN, PAN, bank details and certificates, with automatic checks.' },
+  { icon: ShieldAlert, name: 'Risk orchestration', text: 'Explainable supplier scores. Critical risk places a hold on POs and payments.' },
+  { icon: FileSignature, name: 'Contracts', text: 'Generate from your clause library, review supplier versions, track renewals.' },
+  { icon: Bot, name: 'AI concierge', text: 'Plain-language questions answered from your records, with citations.' },
+  { icon: Network, name: 'ERP push', text: 'Issued POs and approved bills sent to Zoho Books or Tally Prime, exactly once.' },
 ];
 
-const SHOTS = [
-  { src: '/landing/ui/invoice-match.jpg', alt: 'Orrfin.ai three-way match: ordered, received and billed quantities with a blocking price exception', at: 1, pos: '40% 100%' },
-  { src: '/landing/ui/sourcing.jpg', alt: 'Orrfin.ai RFQ bid comparison ranking suppliers by total, lead time, risk and delivery history', at: 4, pos: '100% 100%' },
-  { src: '/landing/ui/risk.jpg', alt: 'Orrfin.ai supplier risk register with high-risk suppliers and active payment holds', at: 8, pos: '0% 30%' },
+const RULES = [
+  { title: 'No self-approval', text: 'The approver of every step is checked against the requester in the database, even for API calls and imports.', where: 'Database rule' },
+  { title: 'No over-receipt or overbilling', text: 'Receipts can’t exceed the PO, and payment is blocked until billed matches received.', where: 'Database rule' },
+  { title: 'No payments to suppliers on hold', text: 'Critical risk places a hold that new POs and payments can’t get past.', where: 'Database rule' },
+  { title: 'No gaps in PO numbers', text: 'Numbers run per branch and fiscal year, like PO/BLR/2026-27/000123.', where: 'Tested under load' },
+  { title: 'No data shared between companies', text: 'Row-level security on every table, keyed to the organization.', where: 'Database rule' },
+  { title: 'No AI acting on its own', text: 'The concierge reads with your permissions. It can draft a request; a person submits it.', where: 'By design' },
 ];
 
-const PROOF = [
-  ['Built for', 'Quick-commerce dark stores', 'Restaurant and cloud-kitchen chains', 'Pharmacy and retail chains', 'Multi-plant manufacturers', 'Companies with several GSTINs'],
-  ['Connects to', 'Tally Prime, through a local relay', 'Zoho Books', 'Google Gemini', 'Anthropic Claude', 'Hindsight supplier memory'],
-  ['Handles India', 'CGST and SGST within a state', 'IGST between states', 'Place of supply on every PO', 'HSN codes on every line', 'PO numbers per branch and year', 'GSTIN checksum checks'],
-  ['Proven by', 'End-to-end tests in Docker', 'Row-level security on every table', 'Gapless numbers under 50 parallel issues', 'ERP outages and lost responses', 'A fictional company with a year of history'],
+const SEGMENTS = [
+  ['Quick commerce and dark stores', 'Hundreds of small, urgent orders for packaging, cold chain and consumables.'],
+  ['Restaurant and cloud-kitchen chains', 'Central kitchens supplying outlets in several states, with licensed suppliers.'],
+  ['Pharmacy and retail chains', 'Fit-outs, IT and facility services bought locally but paid centrally.'],
+  ['Multi-plant manufacturers', 'Indirect spend across plants, each with its own GST registration.'],
 ];
 
 export default function Home() {
-  const mosaic: React.ReactNode[] = [];
-  PRODUCTS.forEach((p, i) => {
-    const shot = SHOTS.find((s) => s.at === i);
-    if (shot) mosaic.push(<Reveal key={shot.src} className="ol-shot" i={i % 4}><Image src={shot.src} alt={shot.alt} width={1600} height={1025} sizes="(max-width: 560px) 100vw, 50vw" style={{ objectPosition: shot.pos }} /></Reveal>);
-    mosaic.push(<Reveal key={p.name} className={`ol-tile ${p.tone}`} i={i % 4}><h3>{p.name}</h3><p>{p.line}</p></Reveal>);
-  });
-
   return (
-    <main className={`ol ${switzer.variable}`}>
-      <section className="ol-hero" aria-labelledby="hero-h">
-        <HeroMedia />
-        <nav className="ol-nav" aria-label="Site">
-          <a href="/" className="ol-word">orrfin.ai</a>
-          <div className="ol-nav-right">
-            <a href="#products">Products</a>
-            <a href="#rules">Try the rules</a>
+    <main className="ol">
+      <header className="ol-nav">
+        <div className="ol-wrap">
+          <a href="/" className="brand"><span className="brand-mark" aria-hidden />orrfin<span className="brand-dot">.ai</span></a>
+          <nav aria-label="Site">
+            <a href="#how" className="hide-sm">How it works</a>
+            <a href="#products" className="hide-sm">Products</a>
+            <a href="#screens" className="hide-sm">Screens</a>
             <a href="/login">Sign in</a>
             <a href="/demo" className="ol-btn">Open the live demo</a>
+          </nav>
+        </div>
+      </header>
+
+      <section className="ol-hero" aria-labelledby="hero-h">
+        <div className="ol-wrap">
+          <h1 id="hero-h">Procurement for businesses that buy across many branches</h1>
+          <p className="lede">Orrfin.ai takes every purchase from a branch request to a matched invoice in Tally or Zoho Books: approvals, purchase orders, goods receipts and three-way matching in one governed workflow, with Indian GST built in.</p>
+          <div className="cta">
+            <a href="/demo" className="ol-btn">Open the live demo</a>
+            <a href="#how" className="ol-btn ghost">See how it works</a>
           </div>
-        </nav>
-        <div className="ol-hero-copy">
-          <h1 id="hero-h">Every branch buys.<br />One team pays.</h1>
-          <p>Orrfin.ai is procurement for Indian multi-branch businesses: requests, approvals, POs, receipts and invoice matching, posted to Tally or Zoho Books.</p>
-          <a href="/demo" className="ol-btn">Open the live demo</a>
+          <p className="note">No sign-up needed. Pick a role in a fictional company and try it.</p>
         </div>
-        <div className="ol-cards">
-          <a className="ol-card" href="#rules"><Image src="/landing/ui/invoice-review.jpg" alt="An invoice PDF beside its extracted, confirmed fields" width={1600} height={1025} sizes="230px" priority /><span>Invoice review <span aria-hidden>↓</span></span></a>
-          <a className="ol-card" href="#products"><Image src="/landing/ui/overview.jpg" alt="Spend overview across ten hubs" width={1600} height={1025} sizes="230px" priority /><span>Spend overview <span aria-hidden>↓</span></span></a>
-        </div>
-      </section>
-
-      <Reveal as="section" className="ol-week" aria-labelledby="week-h">
-        <h2 id="week-h">Where a purchase spends its week</h2>
-        <div className="ol-bar" data-ui>
-          {WEEK.map((s, i) => <div key={s.when} className="ol-seg" style={{ flexGrow: s.grow, flexBasis: 0, background: s.tone, '--i': i } as React.CSSProperties}><b>{s.when}</b></div>)}
-        </div>
-        <div className="ol-clauses">
-          {WEEK.map((s) => <div key={s.when} style={{ flexGrow: s.grow, flexBasis: 0, minWidth: 0 }}><p>{s.clause}</p></div>)}
-        </div>
-      </Reveal>
-
-      <section className="ol-board" aria-labelledby="board-h">
-        <div className="ol-board-head">
-          <h2 id="board-h">Ten hubs, one board</h2>
-          <p>Purchase orders from the demo company. Open any row to see why it is where it is.</p>
-        </div>
-        <Board />
-        <p className="ol-board-note">Kirnova Quick Commerce is fictional; its numbers come from the demo you can sign in to.</p>
-      </section>
-
-      <Rules />
-
-      <section id="products" aria-labelledby="products-h">
-        <div className="ol-products-head">
-          <h2 id="products-h">Nine products. One purchase record.</h2>
-          <p>Each hands its work to the next, so the request, its approvals, the PO, the receipt and the bill are one trail instead of five spreadsheets.</p>
-        </div>
-        <div className="ol-mosaic">{mosaic}</div>
-      </section>
-
-      <section className="ol-proof" aria-labelledby="proof-h">
-        <h2 id="proof-h">What it&rsquo;s built on</h2>
-        <div className="ol-proof-cols">
-          {PROOF.map(([kind, ...names]) => <ul key={kind}><li>{kind}</li>{names.map((n) => <li key={n}>{n}</li>)}</ul>)}
-        </div>
-      </section>
-
-      <Spines />
-
-      <section aria-labelledby="close-h">
-        <div className="ol-strip">
-          <Image src="/landing/photos/kirana-shop.jpg" alt="A neighbourhood kirana store with crates of rice stacked outside" width={1600} height={1063} sizes="33vw" />
-          <StreetClip />
-          <Image src="/landing/photos/india-koyambedu-market-onions-08-3987045248.jpg" alt="Red onions heaped at Koyambedu Market, Chennai" width={1920} height={1440} sizes="33vw" />
-        </div>
-        <div className="ol-close">
-          <div>
-            <h2 id="close-h" className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Try the demo</h2>
-            <p className="big">Run one purchase from a dark store to Tally yourself, no sign-up needed: <a href="/demo">pick anyone in the company</a> and follow it end to end.</p>
-            <div className="small">
-              <p>Kirnova Quick Commerce is a fictional operator with 10 hubs, 58 dark stores, about 150 suppliers and a year of history.</p>
-              <p>Each role sees its own screens and can do only what that job allows.</p>
-            </div>
+        <div className="ol-hero-shot ol-wrap">
+          <div className="ol-frame">
+            <div className="ol-frame-bar"><i /><i /><i /><span>orrfin.ai/app</span></div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/landing/ui/overview.jpg" alt="Orrfin.ai overview: approvals waiting, open orders, invoices to review and monthly spend across ten hubs" width={1600} height={1025} fetchPriority="high" />
           </div>
-          <ul className="roles" aria-label="Roles in the demo">
-            <li>Store lead</li><li>Hub manager</li><li>Head of procurement</li><li>Accounts payable</li><li>Legal</li><li>Risk</li><li>Admin</li>
+        </div>
+        <div className="ol-hero-band" aria-hidden />
+      </section>
+
+      <section id="how" className="ol-section" aria-labelledby="how-h">
+        <div className="ol-wrap">
+          <Reveal className="ol-head">
+            <h2 id="how-h">How a purchase moves through Orrfin.ai</h2>
+            <p>Five steps, each done by the right person, with the record of every step kept together.</p>
+          </Reveal>
+          <ol className="ol-flow">
+            {FLOW.map((f, i) => (
+              <Reveal as="li" key={f.what} i={i}><b>{f.who}</b><h3>{f.what}</h3><p>{f.text}</p></Reveal>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section id="products" className="ol-section alt" aria-labelledby="products-h">
+        <div className="ol-wrap">
+          <Reveal className="ol-head">
+            <h2 id="products-h">Nine products, one purchase record</h2>
+            <p>Each product hands its work to the next, so requests, approvals, orders, receipts and bills stay connected.</p>
+          </Reveal>
+          <div className="ol-products">
+            {PRODUCTS.map(({ icon: Icon, name, text }, i) => (
+              <Reveal key={name} className="ol-product" i={i % 3}><Icon size={22} aria-hidden /><h3>{name}</h3><p>{text}</p></Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="screens" className="ol-section" aria-labelledby="screens-h">
+        <div className="ol-wrap">
+          <Reveal className="ol-head">
+            <h2 id="screens-h">See the product</h2>
+            <p>Real screens from the demo company. Pick one to see what it does.</p>
+          </Reveal>
+          <Screens />
+        </div>
+      </section>
+
+      <section className="ol-section ol-dark" aria-labelledby="rules-h">
+        <div className="ol-wrap">
+          <Reveal className="ol-head">
+            <h2 id="rules-h">Controls that can’t be bypassed</h2>
+            <p>The rules that protect money live in the database, so a hurried click, a bulk import or a script can’t get around them.</p>
+          </Reveal>
+          <ul className="ol-rules">
+            {RULES.map((r, i) => <Reveal as="li" key={r.title} i={i % 2}><em>{r.where}</em><strong>{r.title}</strong><p>{r.text}</p></Reveal>)}
           </ul>
         </div>
       </section>
 
-      <footer className="ol-foot">
-        <div className="ol-foot-cols">
-          <ul><li>Product</li><li><a href="#rules">Try the rules</a></li><li><a href="#products">Nine products</a></li><li><a href="#refusals">What it refuses</a></li></ul>
-          <ul><li>Demo</li><li><a href="/demo">Open the live demo</a></li><li><a href="/login">Sign in with an account</a></li><li><a href="/signup">Create an organization</a></li></ul>
-          <ul><li>Source</li><li><a href="https://github.com/sumitmishraa/vendormind" rel="noopener noreferrer">GitHub repository</a></li></ul>
-          <ul><li>Legal</li><li><a href="/privacy">Privacy</a></li><li><a href="/terms">Terms</a></li></ul>
+      <section className="ol-section" aria-labelledby="fit-h">
+        <div className="ol-wrap ol-fit">
+          <Reveal>
+            <div className="ol-head" style={{ marginBottom: 24 }}>
+              <h2 id="fit-h">Built for multi-branch businesses in India</h2>
+              <p>For companies that buy in many places and pay from one finance team.</p>
+            </div>
+            <dl>{SEGMENTS.map(([t, d]) => <div key={t}><dt>{t}</dt><dd>{d}</dd></div>)}</dl>
+          </Reveal>
+          <Reveal className="ol-checks" i={1}>
+            <h3>A good fit if you have</h3>
+            <ul>
+              {['10 to 500 stores, kitchens or warehouses', 'More than one GSTIN, or branches in several states', 'A central team approving local spend', 'Zoho Books or Tally Prime as your books', 'Invoices you need to match before paying'].map((t) => <li key={t}><CheckCircle2 size={18} aria-hidden />{t}</li>)}
+            </ul>
+          </Reveal>
         </div>
-        <div />
-        <div>
-          <svg viewBox="0 0 1000 205" role="img" aria-label="orrfin.ai"><text x="0" y="170" fontSize="230" textLength="1000" lengthAdjust="spacingAndGlyphs">orrfin.ai</text></svg>
-          <p className="ol-credits">Photographs and footage, via Wikimedia Commons: <a href="https://commons.wikimedia.org/w/index.php?curid=58861993">Goods Carrier, Crawford Market</a> and <a href="https://commons.wikimedia.org/w/index.php?curid=58861968">Banana Stand, Crawford Market</a> by David Brossard (CC BY-SA 2.0); <a href="https://commons.wikimedia.org/wiki/File:Crawford_Market_in_Mumbai_2.jpg">Crawford Market in Mumbai 2</a> by Dudva (CC0); <a href="https://commons.wikimedia.org/w/index.php?curid=24292781">Kirana shop</a> by Renzilde (CC BY-SA 3.0); <a href="https://commons.wikimedia.org/w/index.php?curid=23465754">Koyambedu Market, Onions</a> by McKay Savage (CC BY 2.0); <a href="https://commons.wikimedia.org/wiki/File:Street_in_Mumbai_(video)_01.webm">Street in Mumbai</a> by Nicolas Vigier (CC0). Product screens are from the Orrfin.ai demo.</p>
-          <p className="ol-legal">© {new Date().getFullYear()} Orrfin.ai. Kirnova Quick Commerce and every supplier in the demo are fictional.</p>
+      </section>
+
+      <section className="ol-section" style={{ paddingTop: 0 }} aria-labelledby="cta-h">
+        <div className="ol-wrap">
+          <Reveal className="ol-cta">
+            <div>
+              <h2 id="cta-h">Try it as anyone in the company</h2>
+              <p>Sign in as a store lead, hub manager, procurement, accounts payable, legal, risk or admin, and follow one purchase from request to payment.</p>
+            </div>
+            <div className="ol-cta-side">
+              <a href="/demo" className="ol-btn on-blue">Open the live demo</a>
+              <small>Fictional company: 10 hubs, 58 dark stores, a year of history.</small>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <footer className="ol-foot">
+        <div className="ol-wrap">
+          <span>© {new Date().getFullYear()} Orrfin.ai. The demo company and its suppliers are fictional.</span>
+          <nav aria-label="Footer">
+            <a href="/demo">Live demo</a>
+            <a href="/login">Sign in</a>
+            <a href="https://github.com/sumitmishraa/orrfin-AI" rel="noopener noreferrer">GitHub</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+          </nav>
         </div>
       </footer>
     </main>

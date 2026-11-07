@@ -33,7 +33,7 @@ export default function RolePicker() {
       </ul>
       {error && (
         <p className="ol-roles-error" role="alert">
-          The demo server isn&rsquo;t reachable from here ({error}). Run the Docker stack with the demo company seeded, or set ORRFIN_API_URL to a hosted backend.
+          The demo backend isn&rsquo;t connected to this site yet ({error}). It runs separately from the web pages; please try again in a moment or contact the team.
         </p>
       )}
     </div>
