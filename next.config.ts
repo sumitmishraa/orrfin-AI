@@ -3,7 +3,7 @@ import type { NextConfig } from 'next';
 // Docker: the Caddy gateway routes /api to the Python API. Vercel: set ORRFIN_API_URL to a hosted
 // backend and /api is proxied there (same origin, so the session cookie stays first-party).
 // DEMO_BACKEND is the hackathon demo stack, reached through a temporary tunnel; ORRFIN_API_URL overrides it.
-const DEMO_BACKEND = 'https://e5cc6ca67d0a89.lhr.life';
+const DEMO_BACKEND = 'https://59e4011068f95b.lhr.life';
 const apiTarget = process.env.ORRFIN_API_URL
   || (process.env.VERCEL ? DEMO_BACKEND : process.env.NODE_ENV === 'development' ? 'http://localhost:8080' : '');
 
